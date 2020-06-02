@@ -1137,6 +1137,10 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p)
      */
     s->reset_vector = p->reset_vector;
 
+    /* get missings csrs, not all cores support all csrs */
+    s->missing_csrs      = p->missing_csrs;
+    s->missing_csrs_size = p->missing_csrs_size;
+
     /* have compact bootrom */
     s->compact_bootrom = p->compact_bootrom;
 

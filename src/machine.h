@@ -128,6 +128,8 @@ typedef struct {
     VMEthEntry tab_eth[MAX_ETH_DEVICE];
     int eth_count;
     uint64_t htif_base_addr;
+    uint64_t* missing_csrs;
+    uint64_t missing_csrs_size;
 
     char *cmdline; /* bios or kernel command line */
     BOOL accel_enable; /* enable acceleration (KVM) */

@@ -2139,8 +2139,22 @@ static uint32_t create_fld(int rd, int rs1)
     return 7 | ((rd & 0x1F) << 7) | (0x3<<12) | ((rs1 & 0x1F) << 15);
 }
 
-static void create_csr12_recovery(uint32_t *rom, uint32_t *code_pos, uint32_t csrn, uint16_t val)
+static bool skip_csr_recovery(RISCVCPUState *s, uint32_t csrn)
 {
+    for (uint64_t i = 0; i < s->machine->missing_csrs_size; i++) {
+        if (s->machine->missing_csrs[i] == csrn) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void create_csr12_recovery(uint32_t *rom, uint32_t *code_pos, uint32_t csrn, uint16_t val, RISCVCPUState *s)
+{
+    if (skip_csr_recovery(s, csrn))
+        return;
+
     rom[(*code_pos)++] = create_seti(1, val & 0xFFF);
     rom[(*code_pos)++] = create_csrrw(1, csrn);
 }
@@ -2160,8 +2174,11 @@ static void create_read_warmup(uint32_t *rom, uint32_t *code_pos, uint32_t *data
 }
 #endif
 
-static void create_csr64_recovery(uint32_t *rom, uint32_t *code_pos, uint32_t *data_pos, uint32_t csrn, uint64_t val)
+static void create_csr64_recovery(uint32_t *rom, uint32_t *code_pos, uint32_t *data_pos, uint32_t csrn, uint64_t val, RISCVCPUState *s)
 {
+    if (skip_csr_recovery(s, csrn))
+        return;
+
     uint32_t data_off = sizeof(uint32_t) * (*data_pos - *code_pos);
 
     rom[(*code_pos)++] = create_auipc(1, data_off);
@@ -2235,7 +2252,7 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     if (s->machine->ncpus == 1) // FIXME: May be interesting to freeze hartid >= ncpus
         create_hang_nonzero_hart(rom, &code_pos, &data_pos);
 
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x7b1, s->pc); // Write to DPC (CSR, 0x7b1)
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x7b1, s->pc, s); // Write to DPC (CSR, 0x7b1)
 
     // Write current priviliege level to prv in dcsr (0 user, 1 supervisor, 2 user)
     // dcsr is at 0x7b0 prv is bits 0 & 1
@@ -2247,7 +2264,7 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
         exit(-4);
     }
 
-    create_csr12_recovery(rom, &code_pos, 0x7b0, 0x600 | s->priv);
+    create_csr12_recovery(rom, &code_pos, 0x7b0, 0x600 | s->priv, s);
 
 #ifdef LIVECACHE
     int addr_size;
@@ -2268,15 +2285,15 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     // NOTE: mstatus & misa should be one of the first because risvemu breaks down this
     // register for performance reasons. E.g: restoring the fflags also changes
     // parts of the mstats
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x300, get_mstatus(s, (target_ulong)-1)); // mstatus
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x301, s->misa | ((target_ulong)2 << 62)); // misa
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x300, get_mstatus(s, (target_ulong)-1), s); // mstatus
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x301, s->misa | ((target_ulong)2 << 62), s); // misa
 
     // All the remaining CSRs
     if (s->fs) { // If the FPU is down, you can not recover flags
-        create_csr12_recovery(rom, &code_pos, 0x001, s->fflags);
+        create_csr12_recovery(rom, &code_pos, 0x001, s->fflags, s);
         // Only if fflags, otherwise it would raise an illegal instruction
-        create_csr12_recovery(rom, &code_pos, 0x002, s->frm);
-        create_csr12_recovery(rom, &code_pos, 0x003, s->fflags | (s->frm << 5));
+        create_csr12_recovery(rom, &code_pos, 0x002, s->frm, s);
+        create_csr12_recovery(rom, &code_pos, 0x003, s->fflags | (s->frm << 5), s);
 
         // do the FP registers, iff fs is set
         for (int i = 0; i < 32; i++) {
@@ -2297,40 +2314,40 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     //create_csr64_recovery(rom, &code_pos, &data_pos, 0xb02, s->insn_counter); // instret
 
     for (int i = 3; i < 32 ; ++i) {
-      create_csr12_recovery(rom, &code_pos, 0xb00 + i, 0); // reset mhpmcounter3..31
-      create_csr64_recovery(rom, &code_pos, &data_pos, 0x320 + i, s->mhpmevent[i]); // mhpmevent3..31
+      create_csr12_recovery(rom, &code_pos, 0xb00 + i, 0, s); // reset mhpmcounter3..31
+      create_csr64_recovery(rom, &code_pos, &data_pos, 0x320 + i, s->mhpmevent[i], s); // mhpmevent3..31
     }
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a0, s->tselect); // tselect
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a0, s->tselect, s); // tselect
     //FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a1, s->tdata1); // tdata1
     //FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a2, s->tdata2); // tdata2
     //FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a3, s->tdata3); // tdata3
 
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x302, s->medeleg);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x303, s->mideleg);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x304, s->mie);  // mie & sie
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x305, s->mtvec);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x105, s->stvec);
-    create_csr12_recovery(rom, &code_pos, 0x320, s->mcountinhibit);
-    create_csr12_recovery(rom, &code_pos, 0x306, s->mcounteren);
-    create_csr12_recovery(rom, &code_pos, 0x106, s->scounteren);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x302, s->medeleg, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x303, s->mideleg, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x304, s->mie, s);  // mie & sie
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x305, s->mtvec, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x105, s->stvec, s);
+    create_csr12_recovery(rom, &code_pos, 0x320, s->mcountinhibit, s);
+    create_csr12_recovery(rom, &code_pos, 0x306, s->mcounteren, s);
+    create_csr12_recovery(rom, &code_pos, 0x106, s->scounteren, s);
 
     // NB: restore addr before cfgs for fewer surprises!
     for (int i = 0; i < 16; ++i)
-        create_csr64_recovery(rom, &code_pos, &data_pos, CSR_PMPADDR(i), s->csr_pmpaddr[i]);
+        create_csr64_recovery(rom, &code_pos, &data_pos, CSR_PMPADDR(i), s->csr_pmpaddr[i], s);
     for (int i = 0; i < 4; i += 2)
-        create_csr64_recovery(rom, &code_pos, &data_pos, CSR_PMPCFG(i), s->csr_pmpcfg[i]);
+        create_csr64_recovery(rom, &code_pos, &data_pos, CSR_PMPCFG(i), s->csr_pmpcfg[i], s);
 
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x340, s->mscratch);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x341, s->mepc);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x342, s->mcause);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x343, s->mtval);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x340, s->mscratch, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x341, s->mepc, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x342, s->mcause, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x343, s->mtval, s);
 
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x140, s->sscratch);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x141, s->sepc);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x142, s->scause);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x143, s->stval);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x140, s->sscratch, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x141, s->sepc, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x142, s->scause, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x143, s->stval, s);
 
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x344, s->mip); // mip & sip
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x344, s->mip, s); // mip & sip
 
     for (int i = 3; i < 32; i++) { // Not 1 and 2 which are used by create_...
       create_reg_recovery(rom, &code_pos, &data_pos, i, s->reg[i]);
@@ -2344,8 +2361,8 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
 
     // Assuming 16 ratio between CPU and CLINT and that CPU is reset to zero
     create_io64_recovery( rom, &code_pos, &data_pos, clint_base_addr + 0x4000, s->timecmp);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0xb02, s->minstret);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0xb00, s->mcycle);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0xb02, s->minstret, s);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0xb00, s->mcycle, s);
 
     create_io64_recovery( rom, &code_pos, &data_pos, clint_base_addr + 0xbff8, s->mcycle/RTC_FREQ_DIV);
 
@@ -2354,7 +2371,7 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     }
 
     rom[code_pos++] = create_csrrw(1, 0x7b2);
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x180, s->satp);
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x180, s->satp, s);
     // last Thing because it changes addresses. Use dscratch register to remember reg 1
     rom[code_pos++] = create_csrrs(1, 0x7b2);
 

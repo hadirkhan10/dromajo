@@ -114,6 +114,31 @@ int vm_get_mmio_addrset_opt(JSONValue obj, VirtMachineParams *p)
     return 0;
 }
 
+int vm_get_missing_csrs_opt(JSONValue obj, VirtMachineParams *p)
+{
+    JSONValue val = json_object_get(obj, "missing_csrs");
+    if (json_is_undefined(val))
+        return 0;
+
+    if (val.type != JSON_ARRAY) {
+        vm_error("%s: array expected\n", "missing_csrs");
+        return -1;
+    }
+
+    uint64_t array_size = val.u.array->len;
+    uint64_t* array_ptr = (uint64_t*)mallocz(sizeof(uint64_t)*array_size);
+
+    for (uint64_t i = 0; i < array_size; i++) {
+      JSONValue obj = json_array_get(val, i);
+      array_ptr[i] = obj.u.int64;
+    }
+
+    p->missing_csrs = array_ptr;
+    p->missing_csrs_size = array_size;
+
+    return 0;
+}
+
 static void vm_get_uint64_opt(JSONValue obj, const char *name, uint64_t *pval)
 {
     JSONValue val = json_object_get(obj, name);
@@ -286,6 +311,9 @@ static int virt_machine_parse_config(VirtMachineParams *p,
     if (str) {
         p->cmdline = cmdline_subst(str);
     }
+
+    if (vm_get_missing_csrs_opt(cfg, p) < 0)
+        goto tag_fail;
 
     vm_get_uint64_opt(cfg, "htif_base_addr", &p->htif_base_addr);
     vm_get_uint64_opt(cfg, "maxinsns", &p->maxinsns);
