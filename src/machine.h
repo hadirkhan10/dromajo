@@ -189,6 +189,7 @@ typedef struct VirtMachine {
     const char *snapshot_load_name;
     const char *snapshot_save_name;
     const char *terminate_event;
+    uint32_t    save_format;
     uint64_t    maxinsns;
     uint64_t    trace;
 

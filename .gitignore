@@ -1,4 +1,9 @@
 *.o
+*.bootram
+*.mainram
+*.hex
+*.re_regs
+*.dtb
 *.d
 snap.*
 dromajo

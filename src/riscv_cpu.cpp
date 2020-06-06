@@ -48,6 +48,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <err.h>
+#include <fstream>
+#include <iomanip>
 
 #include "cutils.h"
 #include "iomem.h"
@@ -2094,6 +2096,43 @@ static void deserialize_memory(void *base, size_t size, const char *file)
     close(f_fd);
 }
 
+static void dump_hex_memory(const void *base, size_t size, const char *file)
+{
+    uint8_t* mem_pointer = (uint8_t*)base;
+
+    std::ofstream hex_file;
+    hex_file.open(file);
+
+    int num_bytes = 8;
+    uint32_t iter = 0;
+    while (size) {
+        // format
+        uint32_t buffer1=0;
+        uint32_t buffer2=0;
+        for (int i=0; i<num_bytes; i++) {
+          uint8_t b = *(mem_pointer);
+          mem_pointer++;
+          if (i < num_bytes/2) {
+            buffer1 = buffer1 | (b << 8*i);
+          } else {
+            buffer2 = buffer2 | (b << 8*(i-num_bytes/2));
+          }
+        }
+        // dump if non-zero
+        if (buffer1 > 0 || buffer2 > 0) {
+          hex_file << std::dec << iter << " ";
+          hex_file << std::hex << std::setfill('0') << std::setw(8) << buffer2;
+          hex_file << std::hex << std::setfill('0') << std::setw(8) << buffer1;
+          hex_file << std::endl;
+        }
+
+        size-=num_bytes;
+        iter++;
+    }
+
+    hex_file.close();
+}
+
 static uint32_t create_csrrw(int rs, uint32_t csrn)
 {
     return 0x1073 | ((csrn & 0xFFF) << 20) | ((rs & 0x1F) << 15);
@@ -2384,7 +2423,14 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
         exit(-6);
     }
 
-    serialize_memory(rom, ROM_SIZE, file);
+    if (s->machine->common.save_format == 0) {
+        serialize_memory(rom, ROM_SIZE, file);
+    } else {
+        char *f_name = (char *)alloca(strlen(file)+32);
+        sprintf(f_name, "%s.hex", file);
+
+        dump_hex_memory(rom, ROM_SIZE, f_name);
+    }
 }
 
 void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t clint_base_addr)
@@ -2468,10 +2514,17 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
             assert(!main_ram_found);
             main_ram_found = 1;
 
-            char *f_name = (char *)alloca(strlen(dump_name)+64);
-            sprintf(f_name, "%s.mainram", dump_name);
+            if (s->machine->common.save_format == 0) {
+                char *f_name = (char *)alloca(strlen(dump_name)+64);
+                sprintf(f_name, "%s.mainram", dump_name);
 
-            serialize_memory(pr->phys_mem, pr->size, f_name);
+                serialize_memory(pr->phys_mem, pr->size, f_name);
+            } else {
+                char *f_name_hex = (char *)alloca(strlen(dump_name)+96);
+                sprintf(f_name_hex, "%s.mainram.hex", dump_name);
+
+                dump_hex_memory(pr->phys_mem, pr->size, f_name_hex);
+            }
         }
     }
 
