@@ -937,7 +937,8 @@ static void load_elf_image(RISCVMachine *s, const uint8_t *image, size_t image_l
         if (ph->p_type == PT_LOAD) {
             size_t rounded_size = ph->p_memsz;
             rounded_size = (rounded_size + DEVRAM_PAGE_SIZE - 1) & ~(DEVRAM_PAGE_SIZE - 1);
-            if (ph->p_vaddr != RAM_BASE_ADDR)
+            PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, ph->p_vaddr);
+            if (pr->addr != RAM_BASE_ADDR)
                 cpu_register_ram(s->mem_map, ph->p_vaddr, rounded_size, 0);
             memcpy(get_ram_ptr(s, ph->p_vaddr), image + ph->p_offset, ph->p_filesz);
         }
