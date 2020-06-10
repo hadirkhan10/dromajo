@@ -2423,9 +2423,8 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
         exit(-6);
     }
 
-    if (s->machine->common.save_format == 0) {
-        serialize_memory(rom, ROM_SIZE, file);
-    } else {
+    serialize_memory(rom, ROM_SIZE, file);
+    if (s->machine->common.save_format > 0) {
         char *f_name = (char *)alloca(strlen(file)+32);
         sprintf(f_name, "%s.hex", file);
 
@@ -2514,12 +2513,12 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
             assert(!main_ram_found);
             main_ram_found = 1;
 
-            if (s->machine->common.save_format == 0) {
-                char *f_name = (char *)alloca(strlen(dump_name)+64);
-                sprintf(f_name, "%s.mainram", dump_name);
+            char *f_name = (char *)alloca(strlen(dump_name)+64);
+            sprintf(f_name, "%s.mainram", dump_name);
 
-                serialize_memory(pr->phys_mem, pr->size, f_name);
-            } else {
+            serialize_memory(pr->phys_mem, pr->size, f_name);
+
+            if (s->machine->common.save_format > 0) {
                 char *f_name_hex = (char *)alloca(strlen(dump_name)+96);
                 sprintf(f_name_hex, "%s.mainram.hex", dump_name);
 
