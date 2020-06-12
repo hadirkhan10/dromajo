@@ -193,6 +193,7 @@ static inline uint64_t track_iread(RISCVCPUState *s, uint64_t vaddr, uint64_t pa
 bool
 riscv_cpu_pmp_access_ok(RISCVCPUState *s, uint64_t paddr, size_t size, pmpcfg_t perm)
 {
+    return true; //FIXME: HACK for Ariane
     int priv;
 
     /* rv64mi-p-access expects illegal physical addresses to fail. */

@@ -139,6 +139,31 @@ int vm_get_missing_csrs_opt(JSONValue obj, VirtMachineParams *p)
     return 0;
 }
 
+int vm_get_skip_commit_opt(JSONValue obj, VirtMachineParams *p)
+{
+    JSONValue val = json_object_get(obj, "skip_commit");
+    if (json_is_undefined(val))
+        return 0;
+
+    if (val.type != JSON_ARRAY) {
+        vm_error("%s: array expected\n", "skip_commit");
+        return -1;
+    }
+
+    uint64_t array_size = val.u.array->len;
+    uint64_t* array_ptr = (uint64_t*)mallocz(sizeof(uint64_t)*array_size);
+
+    for (uint64_t i = 0; i < array_size; i++) {
+      JSONValue obj = json_array_get(val, i);
+      array_ptr[i] = obj.u.int64;
+    }
+
+    p->skip_commit = array_ptr;
+    p->skip_commit_size = array_size;
+
+    return 0;
+}
+
 static void vm_get_uint64_opt(JSONValue obj, const char *name, uint64_t *pval)
 {
     JSONValue val = json_object_get(obj, name);
@@ -313,6 +338,9 @@ static int virt_machine_parse_config(VirtMachineParams *p,
     }
 
     if (vm_get_missing_csrs_opt(cfg, p) < 0)
+        goto tag_fail;
+
+    if (vm_get_skip_commit_opt(cfg, p) < 0)
         goto tag_fail;
 
     vm_get_uint64_opt(cfg, "htif_base_addr", &p->htif_base_addr);

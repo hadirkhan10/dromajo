@@ -108,6 +108,8 @@ struct RISCVMachine {
     /* Core specific configs */
     uint64_t* missing_csrs;
     uint64_t missing_csrs_size;
+    uint64_t* skip_commit;
+    uint64_t skip_commit_size;
 };
 
 #define PLIC_BASE_ADDR  0x10000000

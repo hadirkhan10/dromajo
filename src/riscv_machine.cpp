@@ -1143,6 +1143,10 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p)
     s->missing_csrs      = p->missing_csrs;
     s->missing_csrs_size = p->missing_csrs_size;
 
+    /* some implementations hide commits of some instructions (ex: ecall, ebreak)*/
+    s->skip_commit       = p->skip_commit;
+    s->skip_commit_size  = p->skip_commit_size;
+
     /* have compact bootrom */
     s->compact_bootrom = p->compact_bootrom;
 
