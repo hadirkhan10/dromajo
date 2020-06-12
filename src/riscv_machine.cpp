@@ -998,6 +998,7 @@ static int copy_kernel(RISCVMachine *s,
         }
 
         load_elf_image(s, fw_buf, fw_buf_len);
+        elf64_find_global(fw_buf, fw_buf_len, "tohost", &s->htif_tohost_addr);
     }
     else
         memcpy(get_ram_ptr(s, s->ram_base_addr), fw_buf, fw_buf_len);
