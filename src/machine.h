@@ -129,6 +129,20 @@ typedef struct {
     int eth_count;
     uint64_t htif_base_addr;
 
+    /* some csrs may not be implemented in some implementations,
+     * this arrya contains list of these csrs to make sure bootcode
+     * is not generated for them
+     */
+    uint64_t* missing_csrs;
+    uint64_t missing_csrs_size;
+
+    /* commit of some instruction in the RTL is not visible,
+     * this array contains the list of these instructions
+     * to hide them in dromajo as well
+     */
+    uint64_t* skip_commit;
+    uint64_t skip_commit_size;
+
     char *cmdline; /* bios or kernel command line */
     BOOL accel_enable; /* enable acceleration (KVM) */
     char *input_device; /* NULL means no input */
@@ -187,6 +201,7 @@ typedef struct VirtMachine {
     const char *snapshot_load_name;
     const char *snapshot_save_name;
     const char *terminate_event;
+    uint32_t    save_format;
     uint64_t    maxinsns;
     uint64_t    trace;
 

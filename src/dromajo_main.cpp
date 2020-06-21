@@ -599,6 +599,7 @@ static void usage(const char *prog, const char *msg)
             "       --ncpus number of cpus to simulate (default 1)\n"
             "       --load resumes a previously saved snapshot\n"
             "       --save saves a snapshot upon exit\n"
+            "       --save_format [0(default)=bin, 1=hex]\n"
             "       --maxinsns terminates execution after a number of instructions\n"
             "       --terminate-event name of the validate event to terminate execution\n"
             "       --trace start trace dump after a number of instructions. Trace disabled by default\n"
@@ -653,6 +654,7 @@ RISCVMachine *virt_machine_main(int argc, char **argv)
     const char *snapshot_save_name       = 0;
     const char *path                     = NULL;
     const char *cmdline                  = NULL;
+    uint32_t    save_format              = 0;
     long        ncpus                    = 0;
     uint64_t    maxinsns                 = 0;
     uint64_t    trace                    = UINT64_MAX;
@@ -684,6 +686,7 @@ RISCVMachine *virt_machine_main(int argc, char **argv)
             {"ncpus",                   required_argument, 0,  'n' }, // CFG
             {"load",                    required_argument, 0,  'l' },
             {"save",                    required_argument, 0,  's' },
+            {"save_format",             required_argument, 0,  'f' },
             {"maxinsns",                required_argument, 0,  'm' }, // CFG
             {"trace   ",                required_argument, 0,  't' },
             {"ignore_sbi_shutdown",     required_argument, 0,  'P' }, // CFG
@@ -728,6 +731,12 @@ RISCVMachine *virt_machine_main(int argc, char **argv)
             if (snapshot_save_name)
                 usage(prog, "already had a snapshot to save");
             snapshot_save_name = strdup(optarg);
+            break;
+
+        case 'f':
+            if (save_format)
+                usage(prog, "already had a save format set");
+            save_format = (uint32_t) atoll(optarg);
             break;
 
         case 'm':
@@ -1013,6 +1022,7 @@ RISCVMachine *virt_machine_main(int argc, char **argv)
     }
 
     s->common.snapshot_save_name = snapshot_save_name;
+    s->common.save_format        = save_format;
     s->common.trace              = trace;
 
     // Allow the command option argument to overwrite the value

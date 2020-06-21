@@ -159,6 +159,9 @@ static inline void handle_dut_overrides(RISCVCPUState *s,
         (0xB00 <= csrno && csrno < 0xB20 ||
          0xC00 <= csrno && csrno < 0xC20 ||
          (csrno == 0x344 /* mip */ ||
+          /*FIXME*/
+          csrno == 0x343 /* mtval */ ||
+          csrno == 0x143 /* stval */ ||
           csrno == 0x144 /* sip */)))
         riscv_set_reg(s, rd, dut_wdata);
 
@@ -238,6 +241,14 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state,
     int      exit_code = 0;
     bool     verbose = true;
     int      iregno, fregno;
+
+    uint32_t tohost;
+    bool fail = true;
+    tohost = riscv_phys_read_u32(r->cpu_state[hartid], r->htif_tohost_addr, &fail);
+    if (!fail && tohost & 1) {
+        fprintf(dromajo_stderr, "Done. Cosim passed!\n\n");
+        return 2;
+    }
 
     /* Succeed after N instructions without failure. */
     if (r->common.maxinsns == 0) {
@@ -347,13 +358,28 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state,
     uint64_t emu_mstatus = riscv_cpu_get_mstatus(s);
 
     /*
+     * Ariane does not commit ecalls and ebreaks. So we dromajo
+     * needs to skip this one. TODO: maybe make this part of cfg
+     */
+    bool skip_commit = false;
+    for (uint64_t i = 0; i < r->skip_commit_size; i++) {
+      if (r->skip_commit[i] == emu_insn) {
+        skip_commit = true;
+        break;
+      }
+    }
+
+    if (skip_commit) {
+        fprintf(dromajo_stderr, "skipping emu_insn 0x%08x\n", emu_insn);
+        exit_code = 3;
+    /*
      * XXX We currently do not compare mstatus because DUT's mstatus
      * varies between pre-commit (all FP instructions) and post-commit
      * (CSR instructions).
      */
-    if (emu_pc      != dut_pc                           ||
-        emu_insn    != dut_insn  && (emu_insn & 3) == 3 || // DUT expands all C instructions
-        emu_wdata   != dut_wdata && emu_wrote_data) {
+    } else if (emu_pc      != dut_pc                           ||
+               emu_insn    != dut_insn  && (emu_insn & 3) == 3 || // DUT expands all C instructions
+               emu_wdata   != dut_wdata && emu_wrote_data) {
 
         fprintf(dromajo_stderr, "[error] EMU PC %016" PRIx64 ", DUT PC %016" PRIx64 "\n",
                 emu_pc, dut_pc);
@@ -371,7 +397,7 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state,
 
     riscv_cpu_sync_regs(s);
 
-    if (exit_code == 0)
+    if (exit_code == 0 || skip_commit)
         riscv_cpu_sync_regs(s);
 
     return exit_code;

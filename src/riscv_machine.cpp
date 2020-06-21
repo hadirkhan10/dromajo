@@ -937,7 +937,8 @@ static void load_elf_image(RISCVMachine *s, const uint8_t *image, size_t image_l
         if (ph->p_type == PT_LOAD) {
             size_t rounded_size = ph->p_memsz;
             rounded_size = (rounded_size + DEVRAM_PAGE_SIZE - 1) & ~(DEVRAM_PAGE_SIZE - 1);
-            if (ph->p_vaddr != RAM_BASE_ADDR)
+            PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, ph->p_vaddr);
+            if (pr->addr != RAM_BASE_ADDR)
                 cpu_register_ram(s->mem_map, ph->p_vaddr, rounded_size, 0);
             memcpy(get_ram_ptr(s, ph->p_vaddr), image + ph->p_offset, ph->p_filesz);
         }
@@ -997,6 +998,7 @@ static int copy_kernel(RISCVMachine *s,
         }
 
         load_elf_image(s, fw_buf, fw_buf_len);
+        elf64_find_global(fw_buf, fw_buf_len, "tohost", &s->htif_tohost_addr);
     }
     else
         memcpy(get_ram_ptr(s, s->ram_base_addr), fw_buf, fw_buf_len);
@@ -1137,6 +1139,14 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p)
      */
     s->reset_vector = p->reset_vector;
 
+    /* get missings csrs, not all cores support all csrs */
+    s->missing_csrs      = p->missing_csrs;
+    s->missing_csrs_size = p->missing_csrs_size;
+
+    /* some implementations hide commits of some instructions (ex: ecall, ebreak)*/
+    s->skip_commit       = p->skip_commit;
+    s->skip_commit_size  = p->skip_commit_size;
+
     /* have compact bootrom */
     s->compact_bootrom = p->compact_bootrom;
 
@@ -1158,7 +1168,7 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p)
     }
 
     /* RAM */
-    cpu_register_ram(s->mem_map, 0, 4096, 0); // Have memory at 0 for uaccess-etcsr to pass
+    //cpu_register_ram(s->mem_map, 0, 4096, 0); // Have memory at 0 for uaccess-etcsr to pass
     cpu_register_ram(s->mem_map, s->ram_base_addr, s->ram_size, 0);
     cpu_register_ram(s->mem_map, ROM_BASE_ADDR, ROM_SIZE, 0);
 
