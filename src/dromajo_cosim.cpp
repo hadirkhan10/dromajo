@@ -159,6 +159,9 @@ static inline void handle_dut_overrides(RISCVCPUState *s,
         (0xB00 <= csrno && csrno < 0xB20 ||
          0xC00 <= csrno && csrno < 0xC20 ||
          (csrno == 0x344 /* mip */ ||
+          /*FIXME*/
+          csrno == 0x343 /* mtval */ ||
+          csrno == 0x143 /* stval */ ||
           csrno == 0x144 /* sip */)))
         riscv_set_reg(s, rd, dut_wdata);
 
