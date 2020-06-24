@@ -74,6 +74,9 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state,
 void dromajo_cosim_raise_trap(dromajo_cosim_state_t *state,
                               int                   hartid,
                               int64_t               cause);
+
+int dromajo_cosim_get_congestor(dromajo_cosim_state_t *state, int fuzzer_id);
+
 #ifdef __cplusplus
 } // extern C
 #endif

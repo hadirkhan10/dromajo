@@ -343,6 +343,10 @@ static int virt_machine_parse_config(VirtMachineParams *p,
     if (vm_get_skip_commit_opt(cfg, p) < 0)
         goto tag_fail;
 
+    vm_get_uint64_opt(cfg, "fuzzer_congestors", &p->fuzzer_congestors);
+    vm_get_uint64_opt(cfg, "fuzzer_seed", &p->fuzzer_seed);
+    vm_get_uint64_opt(cfg, "fuzzer_rand_max_range", &p->fuzzer_rand_max_range);
+
     vm_get_uint64_opt(cfg, "htif_base_addr", &p->htif_base_addr);
     vm_get_uint64_opt(cfg, "maxinsns", &p->maxinsns);
 

@@ -54,7 +54,7 @@ PROGS=dromajo libdromajo_cosim.a
 all: $(PROGS)
 
 EMU_OBJS:=virtio.o pci.o fs.o cutils.o iomem.o dw_apb_uart.o \
-    json.o machine.o elf64.o LiveCache.o fs_disk.o
+    congestor.o fuzzer.o json.o machine.o elf64.o LiveCache.o fs_disk.o
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)

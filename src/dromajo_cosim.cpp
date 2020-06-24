@@ -24,7 +24,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <assert.h>
-
 /*
  * dromajo_cosim_init --
  *
@@ -401,4 +400,11 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state,
         riscv_cpu_sync_regs(s);
 
     return exit_code;
+}
+
+int dromajo_cosim_get_congestor(dromajo_cosim_state_t *state,
+                                int congestor_id)
+{
+    RISCVMachine  *r = (RISCVMachine *)state;
+    return (int)r->fuzz.get_congestor(congestor_id)->get_and_update();
 }

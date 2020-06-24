@@ -129,6 +129,13 @@ typedef struct {
     int eth_count;
     uint64_t htif_base_addr;
 
+    /*
+     * configs for dromajo's fuzzing feature
+     */
+     uint64_t fuzzer_congestors;
+     uint64_t fuzzer_seed;
+     uint64_t fuzzer_rand_max_range;
+
     /* some csrs may not be implemented in some implementations,
      * this arrya contains list of these csrs to make sure bootcode
      * is not generated for them

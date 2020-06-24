@@ -1147,6 +1147,12 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p)
     s->skip_commit       = p->skip_commit;
     s->skip_commit_size  = p->skip_commit_size;
 
+    /* dromajo fuzzing config */
+    uint64_t seed           = p->fuzzer_seed;
+    uint64_t num_cong       = p->fuzzer_congestors;
+    uint64_t rand_max_range = p->fuzzer_rand_max_range;
+    s->fuzz.init_fuzzers(seed, num_cong, rand_max_range);
+
     /* have compact bootrom */
     s->compact_bootrom = p->compact_bootrom;
 
