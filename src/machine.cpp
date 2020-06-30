@@ -344,6 +344,7 @@ static int virt_machine_parse_config(VirtMachineParams *p,
         goto tag_fail;
 
     vm_get_uint64_opt(cfg, "fuzzer_congestors", &p->fuzzer_congestors);
+    vm_get_uint64_opt(cfg, "fuzzer_table_mutators", &p->fuzzer_table_mutators);
     vm_get_uint64_opt(cfg, "fuzzer_seed", &p->fuzzer_seed);
     vm_get_uint64_opt(cfg, "fuzzer_rand_max_range", &p->fuzzer_rand_max_range);
 

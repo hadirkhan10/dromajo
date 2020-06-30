@@ -3,14 +3,12 @@
 congestor::congestor() {
   this->counter       = 0;
   this->congest       = false;
-  this->random_number = 0;
 }
 
 congestor::congestor(uint64_t rand_max) {
   this->counter       = 0;
   this->congest       = false;
-  this->random_number = 0;
-  this->rand_max      = rand_max;
+  this->rand_max      = rand_max + 7;
 }
 
 congestor::~congestor() {

@@ -246,6 +246,7 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state,
     tohost = riscv_phys_read_u32(r->cpu_state[hartid], r->htif_tohost_addr, &fail);
     if (!fail && tohost & 1) {
         fprintf(dromajo_stderr, "Done. Cosim passed!\n\n");
+        r->fuzz.dump_table_utilizations();
         return 2;
     }
 
@@ -407,4 +408,34 @@ int dromajo_cosim_get_congestor(dromajo_cosim_state_t *state,
 {
     RISCVMachine  *r = (RISCVMachine *)state;
     return (int)r->fuzz.get_congestor(congestor_id)->get_and_update();
+}
+
+uint64_t dromajo_cosim_mem_access(dromajo_cosim_state_t* state,
+                             uint64_t table_mutator_id,
+                             uint64_t addr_di, uint64_t ben_si, 
+                             uint64_t wrdata_di, bool wren_si,
+                             bool reset_n, bool csel_si)
+{
+    RISCVMachine  *r = (RISCVMachine *)state;
+
+    uint64_t ret = r->fuzz.get_table_mutator(table_mutator_id)->emu_ariane_mem_acc(addr_di,
+                                                                           ben_si,
+                                                                           wrdata_di,
+                                                                           wren_si,
+                                                                           reset_n,
+                                                                           csel_si);
+    return ret;
+}
+
+void dromajo_cosim_init_table_mutator(dromajo_cosim_state_t* state,
+                                      uint64_t table_mutator_id, uint64_t depth,
+                                      uint64_t init_value)
+{
+    RISCVMachine  *r = (RISCVMachine *)state;
+    return r->fuzz.get_table_mutator(table_mutator_id)->init_table(depth, init_value);
+}
+
+void dromajo_cosim_mutate_tables(dromajo_cosim_state_t* state) {
+    RISCVMachine  *r = (RISCVMachine *)state;
+    r->fuzz.update_table_triggers();
 }

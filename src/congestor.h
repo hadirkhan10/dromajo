@@ -3,11 +3,11 @@
 
 #include <stdint.h>
 #include <iostream>
+#include <cstdlib>
 
 class congestor {
   private:
     uint64_t counter;
-    uint64_t random_number;
     uint64_t rand_max;
     bool congest;
 

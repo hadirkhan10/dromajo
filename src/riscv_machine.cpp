@@ -1150,8 +1150,9 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p)
     /* dromajo fuzzing config */
     uint64_t seed           = p->fuzzer_seed;
     uint64_t num_cong       = p->fuzzer_congestors;
+    uint64_t num_tb_mut     = p->fuzzer_table_mutators;
     uint64_t rand_max_range = p->fuzzer_rand_max_range;
-    s->fuzz.init_fuzzers(seed, num_cong, rand_max_range);
+    s->fuzz.init_fuzzers(seed, num_cong, num_tb_mut, rand_max_range);
 
     /* have compact bootrom */
     s->compact_bootrom = p->compact_bootrom;

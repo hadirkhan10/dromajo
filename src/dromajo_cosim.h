@@ -75,7 +75,20 @@ void dromajo_cosim_raise_trap(dromajo_cosim_state_t *state,
                               int                   hartid,
                               int64_t               cause);
 
-int dromajo_cosim_get_congestor(dromajo_cosim_state_t *state, int fuzzer_id);
+int dromajo_cosim_get_congestor(dromajo_cosim_state_t *state, 
+                                int congestor_id);
+
+uint64_t dromajo_cosim_mem_access(dromajo_cosim_state_t* state,
+                             uint64_t table_mutator_id,
+                             uint64_t addr_di, uint64_t ben_si, 
+                             uint64_t wrdata_di, bool wren_si,
+                             bool reset_n, bool csel_si);
+
+void dromajo_cosim_init_table_mutator(dromajo_cosim_state_t* state, 
+                                      uint64_t table_mutator_id, uint64_t depth,
+                                      uint64_t init_value);
+
+void dromajo_cosim_mutate_tables(dromajo_cosim_state_t* state);
 
 #ifdef __cplusplus
 } // extern C

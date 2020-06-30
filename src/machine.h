@@ -133,6 +133,7 @@ typedef struct {
      * configs for dromajo's fuzzing feature
      */
      uint64_t fuzzer_congestors;
+     uint64_t fuzzer_table_mutators;
      uint64_t fuzzer_seed;
      uint64_t fuzzer_rand_max_range;
 
