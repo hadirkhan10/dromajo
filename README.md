@@ -21,14 +21,20 @@ take it to ISA 2.3/priv 1.11.
 ## Building
 
 ```
-make -C src
+mkdir build
+cd build
+# Debug build
+cmake ..
+# Release build Ofast compile option
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make
 ```
 
 The resulting artifacts are the `dromajo` simulator and the
 `libdromajo_cosim.a` library with associated `dromajo_cosim.h`
 header file.
 
-Check the [setup.md](run/setup.md) for instructions how to compile tests like
+Check the [setup.md](doc/setup.md) for instructions how to compile tests like
 booting Linux and baremetal for dromajo.
 
 ## Usage
@@ -38,7 +44,6 @@ will depend on that, but the `src/dromajo.c` utility allows for standalone
 simulation of RISC-V ELF binaries.
 
 ```
-cd src
 ./dromajo
 error: missing config file
 usage: ./dromajo [--load snapshot_name] [--save snapshot_name] [--maxinsns N] [--memory_size MB] config

@@ -38,38 +38,36 @@
  * THE SOFTWARE.
  */
 
-#include "dromajo.h"
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <inttypes.h>
 #include <assert.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <unistd.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "cutils.h"
+#include "dromajo.h"
+#include "fs_utils.h"
 #include "iomem.h"
 #include "virtio.h"
-#include "fs_utils.h"
 #ifdef CONFIG_FS_NET
 #include "fs_wget.h"
 #endif
-#include "riscv_machine.h"
 #include "elf64.h"
+#include "riscv_machine.h"
 
-void __attribute__((format(printf, 1, 2))) vm_error(const char *fmt, ...)
-{
+void __attribute__((format(printf, 1, 2))) vm_error(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vfprintf(dromajo_stderr, fmt, ap);
     va_end(ap);
 }
 
-int vm_get_int(JSONValue obj, const char *name, int64_t *pval)
-{
+int vm_get_int(JSONValue obj, const char *name, int64_t *pval) {
     JSONValue val = json_object_get(obj, name);
 
     if (json_is_undefined(val)) {
@@ -87,8 +85,7 @@ int vm_get_int(JSONValue obj, const char *name, int64_t *pval)
     return 0;
 }
 
-int vm_get_mmio_addrset_opt(JSONValue obj, VirtMachineParams *p)
-{
+int vm_get_mmio_addrset_opt(JSONValue obj, VirtMachineParams *p) {
     JSONValue val = json_object_get(obj, "mmio_addrset");
 
     if (json_is_undefined(val))
@@ -99,23 +96,22 @@ int vm_get_mmio_addrset_opt(JSONValue obj, VirtMachineParams *p)
         return -1;
     }
 
-    uint64_t mmio_addrset_size = val.u.array->len;
-    AddressSet *mmio_addrset = (AddressSet *)mallocz(sizeof(AddressSet)*mmio_addrset_size);
+    uint64_t    mmio_addrset_size = val.u.array->len;
+    AddressSet *mmio_addrset      = (AddressSet *)mallocz(sizeof(AddressSet) * mmio_addrset_size);
 
     for (int i = 0; i < val.u.array->len; ++i) {
         JSONValue obj = json_array_get(val, i);
-        vm_get_int(obj, "start", (int64_t*)&mmio_addrset[i].start);
-        vm_get_int(obj, "size",(int64_t*)&mmio_addrset[i].size);
+        vm_get_int(obj, "start", (int64_t *)&mmio_addrset[i].start);
+        vm_get_int(obj, "size", (int64_t *)&mmio_addrset[i].size);
     }
 
-    p->mmio_addrset = mmio_addrset;
+    p->mmio_addrset      = mmio_addrset;
     p->mmio_addrset_size = mmio_addrset_size;
 
     return 0;
 }
 
-static void vm_get_uint64_opt(JSONValue obj, const char *name, uint64_t *pval)
-{
+static void vm_get_uint64_opt(JSONValue obj, const char *name, uint64_t *pval) {
     JSONValue val = json_object_get(obj, name);
 
     if (json_is_undefined(val))
@@ -129,11 +125,15 @@ static void vm_get_uint64_opt(JSONValue obj, const char *name, uint64_t *pval)
     *pval = (uint64_t)val.u.int64;
 }
 
-static int vm_get_str2(JSONValue obj, const char *name, const char **pstr,
-                      BOOL is_opt)
-{
-    JSONValue val;
-    val = json_object_get(obj, name);
+/*
+ * Look for string property in the JSON object and allocate a copy if
+ * found.  The parameter is_opt dermines if abscene is a failure, or
+ * just results in a NULL string.
+ *
+ * Return 0 on success, otherwise it's a failure.
+ */
+static int vm_get_str2(JSONValue obj, const char *name, char **pstr, BOOL is_opt) {
+    JSONValue val = json_object_get(obj, name);
     if (json_is_undefined(val)) {
         if (is_opt) {
             *pstr = NULL;
@@ -147,34 +147,21 @@ static int vm_get_str2(JSONValue obj, const char *name, const char **pstr,
         vm_error("%s: string expected\n", name);
         return -1;
     }
-    *pstr = val.u.str->data;
+
+    *pstr = strdup(val.u.str->data);
+
     return 0;
 }
 
-static int vm_get_str(JSONValue obj, const char *name, const char **pstr)
-{
-    return vm_get_str2(obj, name, pstr, FALSE);
-}
+static int vm_get_str(JSONValue obj, const char *name, char **pstr) { return vm_get_str2(obj, name, pstr, FALSE); }
 
-static int vm_get_str_opt(JSONValue obj, const char *name, const char **pstr)
-{
-    return vm_get_str2(obj, name, pstr, TRUE);
-}
-
-static char *strdup_null(const char *str)
-{
-    if (!str)
-        return NULL;
-    else
-        return strdup(str);
-}
+static int vm_get_str_opt(JSONValue obj, const char *name, char **pstr) { return vm_get_str2(obj, name, pstr, TRUE); }
 
 /* currently only for "TZ" */
-static char *cmdline_subst(const char *cmdline)
-{
-    DynBuf dbuf;
+static char *cmdline_subst(const char *cmdline) {
+    DynBuf      dbuf;
     const char *p;
-    char var_name[32], *q, buf[32];
+    char        var_name[32], *q, buf[32];
 
     dbuf_init(&dbuf);
     p = cmdline;
@@ -191,20 +178,19 @@ static char *cmdline_subst(const char *cmdline)
             if (*p == '}')
                 p++;
             if (!strcmp(var_name, "TZ")) {
-                time_t ti;
+                time_t    ti;
                 struct tm tm;
-                int n, sg;
+                int       n, sg;
                 /* get the offset to UTC */
                 time(&ti);
                 localtime_r(&ti, &tm);
-                n = tm.tm_gmtoff / 60;
+                n  = tm.tm_gmtoff / 60;
                 sg = '-';
                 if (n < 0) {
                     sg = '+';
-                    n = -n;
+                    n  = -n;
                 }
-                snprintf(buf, sizeof(buf), "UTC%c%02d:%02d",
-                         sg, n / 60, n % 60);
+                snprintf(buf, sizeof(buf), "UTC%c%02d:%02d", sg, n / 60, n % 60);
                 dbuf_putstr(&dbuf, buf);
             }
         } else {
@@ -215,14 +201,15 @@ static char *cmdline_subst(const char *cmdline)
     return (char *)dbuf.buf;
 }
 
-static int virt_machine_parse_config(VirtMachineParams *p,
-                                     char *config_file_str, int len)
-{
-    int64_t version, val;
-    const char *tag_name, *machine_name, *str;
-    char buf1[256];
-    JSONValue cfg, obj, el;
-    p->maxinsns = 0;
+/* STRIVE TO KEEP THE CONFIG PARAMETERS AND CONFIG OPTIONS IN SYNC */
+
+static int virt_machine_parse_config(VirtMachineParams *p, char *config_file_str, int len) {
+    int64_t     version, val;
+    const char *machine_name;
+    char *      str;
+    char        buf1[256];
+    JSONValue   cfg, obj, el;
+    p->maxinsns      = 0;
     p->dump_memories = false;
 
     cfg = json_parse_value_len(config_file_str, len);
@@ -248,39 +235,23 @@ static int virt_machine_parse_config(VirtMachineParams *p,
         goto tag_fail;
     machine_name = virt_machine_get_name();
     if (strcmp(machine_name, str) != 0) {
-        vm_error("Unsupported machine: '%s' (running machine is '%s')\n",
-                 str, machine_name);
+        vm_error("Unsupported machine: '%s' (running machine is '%s')\n", str, machine_name);
         return -1;
     }
+    free(str);
 
     vm_get_uint64_opt(cfg, "memory_base_addr", &p->ram_base_addr);
 
-    tag_name = "memory_size";
-    if (vm_get_int(cfg, tag_name, &val) < 0)
+    if (vm_get_int(cfg, "memory_size", &val) < 0)
         goto tag_fail;
     p->ram_size = (size_t)val << 20;
 
-    tag_name = "bios";
-    if (vm_get_str_opt(cfg, tag_name, &str) < 0)
+    if (vm_get_str_opt(cfg, "bios", &p->files[VM_FILE_BIOS].filename) < 0)
         goto tag_fail;
-    if (str) {
-        p->files[VM_FILE_BIOS].filename = strdup(str);
-    }
-
-    tag_name = "kernel";
-    if (vm_get_str_opt(cfg, tag_name, &str) < 0)
+    if (vm_get_str_opt(cfg, "kernel", &p->files[VM_FILE_KERNEL].filename) < 0)
         goto tag_fail;
-    if (str) {
-        p->files[VM_FILE_KERNEL].filename = strdup(str);
-    }
-
-    tag_name = "initrd";
-    if (vm_get_str_opt(cfg, tag_name, &str) < 0)
+    if (vm_get_str_opt(cfg, "initrd", &p->files[VM_FILE_INITRD].filename) < 0)
         goto tag_fail;
-    if (str) {
-        p->files[VM_FILE_INITRD].filename = strdup(str);
-    }
-
     if (vm_get_str_opt(cfg, "cmdline", &str) < 0)
         goto tag_fail;
     if (str) {
@@ -290,13 +261,8 @@ static int virt_machine_parse_config(VirtMachineParams *p,
     vm_get_uint64_opt(cfg, "htif_base_addr", &p->htif_base_addr);
     vm_get_uint64_opt(cfg, "maxinsns", &p->maxinsns);
 
-    // checkpoint file path
-    p->snapshot_load_name = NULL;
-    tag_name = "load";
-    str = NULL;
-    if (vm_get_str_opt(cfg, tag_name, &str) == 0 && str != NULL) {
-        p->snapshot_load_name = strdup(str);
-    }
+    if (vm_get_str_opt(cfg, "load", &p->snapshot_load_name) < 0)
+        goto tag_fail;
 
     for (;;) {
         snprintf(buf1, sizeof(buf1), "drive%d", p->drive_count);
@@ -307,12 +273,10 @@ static int virt_machine_parse_config(VirtMachineParams *p,
             vm_error("Too many drives\n");
             return -1;
         }
-        if (vm_get_str(obj, "file", &str) < 0)
+        if (vm_get_str(obj, "file", &p->tab_drive[p->drive_count].filename) < 0)
             goto tag_fail;
-        p->tab_drive[p->drive_count].filename = strdup(str);
-        if (vm_get_str_opt(obj, "device", &str) < 0)
+        if (vm_get_str_opt(obj, "device", &p->tab_drive[p->drive_count].device) < 0)
             goto tag_fail;
-        p->tab_drive[p->drive_count].device = strdup_null(str);
         p->drive_count++;
     }
 
@@ -325,24 +289,22 @@ static int virt_machine_parse_config(VirtMachineParams *p,
             vm_error("Too many filesystems\n");
             return -1;
         }
-        if (vm_get_str(obj, "file", &str) < 0)
+        if (vm_get_str(obj, "file", &p->tab_fs[p->fs_count].filename) < 0)
             goto tag_fail;
-        p->tab_fs[p->fs_count].filename = strdup(str);
-        if (vm_get_str_opt(obj, "tag", &str) < 0)
+        if (vm_get_str_opt(obj, "tag", &p->tab_fs[p->fs_count].tag) < 0)
             goto tag_fail;
-        if (!str) {
+        if (!p->tab_fs[p->fs_count].tag) {
             if (p->fs_count == 0)
                 strcpy(buf1, "/dev/root");
             else
                 snprintf(buf1, sizeof(buf1), "/dev/root%d", p->fs_count);
-            str = buf1;
+            p->tab_fs[p->fs_count].tag = strdup(buf1);
         }
-        p->tab_fs[p->fs_count].tag = strdup(str);
         p->fs_count++;
     }
 
     for (;;) {
-        snprintf(buf1, sizeof(buf1), "eth%d", p->eth_count);
+        snprintf(buf1, sizeof buf1, "eth%d", p->eth_count);
         obj = json_object_get(cfg, buf1);
         if (json_is_undefined(obj))
             break;
@@ -350,38 +312,30 @@ static int virt_machine_parse_config(VirtMachineParams *p,
             vm_error("Too many ethernet interfaces\n");
             return -1;
         }
-        if (vm_get_str(obj, "driver", &str) < 0)
+        if (vm_get_str(obj, "driver", &p->tab_eth[p->eth_count].driver) < 0)
             goto tag_fail;
-        p->tab_eth[p->eth_count].driver = strdup(str);
-        if (!strcmp(str, "tap")) {
-            if (vm_get_str(obj, "ifname", &str) < 0)
+        if (!strcmp(p->tab_eth[p->eth_count].driver, "tap")) {
+            if (vm_get_str(obj, "ifname", &p->tab_eth[p->eth_count].ifname) < 0)
                 goto tag_fail;
-            p->tab_eth[p->eth_count].ifname = strdup(str);
         }
         p->eth_count++;
     }
 
     p->display_device = NULL;
-    obj = json_object_get(cfg, "display0");
+    obj               = json_object_get(cfg, "display0");
     if (!json_is_undefined(obj)) {
-        if (vm_get_str(obj, "device", &str) < 0)
+        if (vm_get_str(obj, "device", &p->display_device) < 0)
             goto tag_fail;
-        p->display_device = strdup(str);
         if (vm_get_int(obj, "width", &p->width) < 0)
             goto tag_fail;
         if (vm_get_int(obj, "height", &p->height) < 0)
             goto tag_fail;
-        if (vm_get_str_opt(obj, "vga_bios", &str) < 0)
+        if (vm_get_str_opt(obj, "vga_bios", &p->files[VM_FILE_VGA_BIOS].filename) < 0)
             goto tag_fail;
-        if (str) {
-            p->files[VM_FILE_VGA_BIOS].filename = strdup(str);
-        }
     }
 
-    if (vm_get_str_opt(cfg, "input_device", &str) < 0)
+    if (vm_get_str_opt(cfg, "input_device", &p->input_device) < 0)
         goto tag_fail;
-    p->input_device = strdup_null(str);
-
     if (vm_get_str_opt(cfg, "accel", &str) < 0)
         goto tag_fail;
     if (str) {
@@ -393,13 +347,13 @@ static int virt_machine_parse_config(VirtMachineParams *p,
             vm_error("unsupported 'accel' config: %s\n", str);
             return -1;
         }
+        free(str);
     }
 
-    tag_name = "rtc_local_time";
-    el = json_object_get(cfg, tag_name);
+    el = json_object_get(cfg, "rtc_local_time");
     if (!json_is_undefined(el)) {
         if (el.type != JSON_BOOL) {
-            vm_error("%s: boolean expected\n", tag_name);
+            vm_error("rtc_local_time: boolean expected\n");
             goto tag_fail;
         }
         p->rtc_local_time = el.u.b;
@@ -408,20 +362,20 @@ static int virt_machine_parse_config(VirtMachineParams *p,
     vm_get_uint64_opt(cfg, "ncpus", &p->ncpus);
 
     vm_get_uint64_opt(cfg, "mmio_start", &p->mmio_start);
-    vm_get_uint64_opt(cfg, "mmio_end",   &p->mmio_end);
+    vm_get_uint64_opt(cfg, "mmio_end", &p->mmio_end);
     if (vm_get_mmio_addrset_opt(cfg, p) < 0)
         goto tag_fail;
 
     vm_get_uint64_opt(cfg, "physical_addr_len", &p->physical_addr_len);
 
-    if (vm_get_str_opt(cfg, "logfile", &str) < 0)
+    if (vm_get_str_opt(cfg, "logfile", &p->logfile) < 0)
         goto tag_fail;
-    if (str)
-        p->logfile = strdup(str);
+    if (vm_get_str_opt(cfg, "bootrom", &p->bootrom_name) < 0)
+        goto tag_fail;
 
     json_free(cfg);
     return 0;
- tag_fail:
+tag_fail:
     json_free(cfg);
     return -1;
 }
@@ -434,17 +388,15 @@ typedef struct {
     void *opaque;
 
     FSLoadFileCB *file_load_cb;
-    void *file_load_opaque;
-    int file_index;
+    void *        file_load_opaque;
+    int           file_index;
 } VMConfigLoadState;
 
 static void config_file_loaded(void *opaque, uint8_t *buf, int buf_len);
 static void config_additional_file_load(VMConfigLoadState *s);
-static void config_additional_file_load_cb(void *opaque,
-                                           uint8_t *buf, int buf_len);
+static void config_additional_file_load_cb(void *opaque, uint8_t *buf, int buf_len);
 
-char *get_file_path(const char *base_filename, const char *filename)
-{
+char *get_file_path(const char *base_filename, const char *filename) {
     if (!base_filename)
         return strdup(filename);
     if (strchr(filename, ':'))
@@ -456,18 +408,16 @@ char *get_file_path(const char *base_filename, const char *filename)
     if (!p)
         return strdup(filename);
 
-    int len = p + 1 - base_filename;
-    int len1 = strlen(filename);
+    int   len   = p + 1 - base_filename;
+    int   len1  = strlen(filename);
     char *fname = (char *)malloc(len + len1 + 1);
     memcpy(fname, base_filename, len);
     memcpy(fname + len, filename, len1 + 1);
     return fname;
 }
 
-
 /* return -1 if error. */
-int load_file(uint8_t **pbuf, const char *filename)
-{
+int load_file(uint8_t **pbuf, const char *filename) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
         perror(filename);
@@ -487,8 +437,7 @@ int load_file(uint8_t **pbuf, const char *filename)
 }
 
 #ifdef CONFIG_FS_NET
-static void config_load_file_cb(void *opaque, int err, void *data, size_t size)
-{
+static void config_load_file_cb(void *opaque, int err, void *data, size_t size) {
     VMConfigLoadState *s = opaque;
 
     //    fprintf(dromajo_stdout, "err=%d data=%p size=%ld\n", err, data, size);
@@ -500,41 +449,34 @@ static void config_load_file_cb(void *opaque, int err, void *data, size_t size)
 }
 #endif
 
-static void config_load_file(VMConfigLoadState *s, const char *filename,
-                             FSLoadFileCB *cb, void *opaque)
-{
+static void config_load_file(VMConfigLoadState *s, const char *filename, FSLoadFileCB *cb, void *opaque) {
     //    printf("loading %s\n", filename);
 #ifdef CONFIG_FS_NET
     if (is_url(filename)) {
-        s->file_load_cb = cb;
+        s->file_load_cb     = cb;
         s->file_load_opaque = opaque;
         fs_wget(filename, NULL, NULL, s, config_load_file_cb, TRUE);
     } else
 #endif
     {
         uint8_t *buf;
-        int size = load_file(&buf, filename);
+        int      size = load_file(&buf, filename);
         cb(opaque, buf, size);
         free(buf);
     }
 }
 
-void virt_machine_load_config_file(VirtMachineParams *p,
-                                   const char *filename,
-                                   void (*start_cb)(void *opaque),
-                                   void *opaque)
-{
+void virt_machine_load_config_file(VirtMachineParams *p, const char *filename, void (*start_cb)(void *opaque), void *opaque) {
     VMConfigLoadState *s = (VMConfigLoadState *)mallocz(sizeof(*s));
-    s->vm_params = p;
-    s->start_cb = start_cb;
-    s->opaque = opaque;
-    p->cfg_filename = strdup(filename);
+    s->vm_params         = p;
+    s->start_cb          = start_cb;
+    s->opaque            = opaque;
+    p->cfg_filename      = strdup(filename);
 
     config_load_file(s, filename, config_file_loaded, s);
 }
 
-static void config_file_loaded(void *opaque, uint8_t *buf, int buf_len)
-{
+static void config_file_loaded(void *opaque, uint8_t *buf, int buf_len) {
     VMConfigLoadState *s = (VMConfigLoadState *)opaque;
     VirtMachineParams *p = s->vm_params;
 
@@ -546,11 +488,9 @@ static void config_file_loaded(void *opaque, uint8_t *buf, int buf_len)
     config_additional_file_load(s);
 }
 
-static void config_additional_file_load(VMConfigLoadState *s)
-{
+static void config_additional_file_load(VMConfigLoadState *s) {
     VirtMachineParams *p = s->vm_params;
-    while (s->file_index < VM_FILE_COUNT &&
-           p->files[s->file_index].filename == NULL) {
+    while (s->file_index < VM_FILE_COUNT && p->files[s->file_index].filename == NULL) {
         s->file_index++;
     }
     if (s->file_index == VM_FILE_COUNT) {
@@ -560,17 +500,13 @@ static void config_additional_file_load(VMConfigLoadState *s)
     } else {
         char *fname;
 
-        fname = get_file_path(p->cfg_filename,
-                              p->files[s->file_index].filename);
-        config_load_file(s, fname,
-                         config_additional_file_load_cb, s);
+        fname = get_file_path(p->cfg_filename, p->files[s->file_index].filename);
+        config_load_file(s, fname, config_additional_file_load_cb, s);
         free(fname);
     }
 }
 
-static void config_additional_file_load_cb(void *opaque,
-                                           uint8_t *buf, int buf_len)
-{
+static void config_additional_file_load_cb(void *opaque, uint8_t *buf, int buf_len) {
     VMConfigLoadState *s = (VMConfigLoadState *)opaque;
     VirtMachineParams *p = s->vm_params;
 
@@ -583,8 +519,7 @@ static void config_additional_file_load_cb(void *opaque,
     config_additional_file_load(s);
 }
 
-void vm_add_cmdline(VirtMachineParams *p, const char *cmdline)
-{
+void vm_add_cmdline(VirtMachineParams *p, const char *cmdline) {
     char *new_cmdline;
     if (cmdline[0] == '!') {
         new_cmdline = strdup(cmdline + 1);
@@ -601,8 +536,7 @@ void vm_add_cmdline(VirtMachineParams *p, const char *cmdline)
     p->cmdline = new_cmdline;
 }
 
-void virt_machine_free_config(VirtMachineParams *p)
-{
+void virt_machine_free_config(VirtMachineParams *p) {
     int i;
 
     free(p->cmdline);

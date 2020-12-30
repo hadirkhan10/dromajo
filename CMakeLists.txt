@@ -2,7 +2,7 @@
 # Dromajo, a RISC-V Emulator (based on Fabrice Bellard's RISCVEMU/TinyEMU)
 #
 # Copyright (c) 2016-2017 Fabrice Bellard
-# Copyright (c) 2018,2019 Esperanto Technology
+# Copyright (c) 2018,2019,2020 Esperanto Technology
 #
 # Licensed under the Apache License, Version 2.0 (the "License")
 # you may not use this file except in compliance with the License.
@@ -38,67 +38,72 @@
 # THE SOFTWARE.
 #
 
-VERSION=Dromajo-0.1
+cmake_minimum_required(VERSION 2.8)
+set(CMAKE_CXX_STANDARD 11)
+project(dromajo)
+option(TRACEOS "TRACEOS" OFF)
+option(SIMPOINT "SIMPOINT" OFF)
 
-CXX=g++
-CFLAGS_OPT=-Ofast
-CXXFLAGS=$(CFLAGS_OPT) -Wall -std=c++11 -g -Wno-parentheses -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -MMD
-CXXFLAGS+=-D_GNU_SOURCE -DCONFIG_VERSION=\"$(VERSION)\"
-#CXXFLAGS+=-DLIVECACHE
-LDFLAGS=
+add_compile_options(
+        -std=c++11
+        -Wall
+        -Wno-parentheses
+        -MMD
+        -D_FILE_OFFSET_BITS=64
+        -D_LARGEFILE_SOURCE
+        -D_GNU_SOURCE
+        -D__STDC_FORMAT_MACROS
+)
 
-bindir=/usr/local/bin
-INSTALL=install
-PROGS=dromajo libdromajo_cosim.a
+add_compile_options($<$<CONFIG:Release>:-Ofast>)
 
-all: $(PROGS)
+if (TRACEOS)
+    message(STATUS "TRACEOS is on.")
+    add_compile_options(
+            -DDUMP_UART
+            -DDUMP_CLINT
+            -DDUMP_PLIC
+            -DDUMP_INTERRUPTS
+            -DDUMP_ILLEGAL_INSTRUCTIONS
+    )
+endif ()
 
-EMU_OBJS:=virtio.o pci.o fs.o cutils.o iomem.o dw_apb_uart.o \
-    json.o machine.o elf64.o LiveCache.o fs_disk.o
+if (SIMPOINT)
+    add_compile_options(
+            -DSIMPOINT_BB
+    )
+endif ()
 
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Linux)
-	CXXFLAGS += -Werror
-	EMU_LIBS=-lrt
-endif
-ifeq ($(UNAME_S),Darwin)
-	EMU_LIBS=
-endif
+# Set Version Header
+set(CONFIG_VERSION "Dromajo-0.1")
+configure_file(include/config.h.in config.h @ONLY)
 
-dromajo: dromajo.o libdromajo_cosim.a
-	$(CXX) $(LDFLAGS) -o $@ $^ $(DROMAJO_LIBS) $(EMU_LIBS)
+# libdromajo_cosim
+add_library(dromajo_cosim STATIC
+        src/virtio.cpp
+        src/pci.cpp
+        src/fs.cpp
+        src/cutils.cpp
+        src/iomem.cpp
+        src/dw_apb_uart.cpp
+        src/json.cpp
+        src/machine.cpp
+        src/elf64.cpp
+        src/LiveCache.cpp
+        src/fs_disk.cpp
+        src/softfp.cpp
+        src/riscv_machine.cpp
+        src/dromajo_main.cpp
+        src/dromajo_cosim.cpp
+        src/riscv_cpu.cpp
+        )
 
-dromajo_cosim_test: dromajo_cosim_test.o libdromajo_cosim.a
-	$(CXX) $(LDFLAGS) -o $@ $^ $(DROMAJO_LIBS) $(EMU_LIBS)
+# add librt for Linux
+if (${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
+    target_link_libraries(dromajo_cosim rt)
+endif ()
 
-libdromajo_cosim.a: dromajo_cosim.o riscv_cpu.o dromajo_main.o \
-	riscv_machine.o softfp.o $(EMU_OBJS)
-	ar rvs $@ $^
+include_directories(include ${CMAKE_CURRENT_BINARY_DIR})
 
-install: $(PROGS)
-	$(INSTALL) -m755 $(PROGS) "$(DESTDIR)$(bindir)"
-
-%.o: %.c
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
-
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
-
-debug:
-	$(MAKE) CFLAGS_OPT=
-
-build:
-	mkdir -p build
-
-clean:
-	rm -f *.o *.d *~ $(PROGS)
-	rm -rf build
-
--include $(wildcard *.d)
-
-tags:
-	etags *.[hc]
-
-release:
-	git archive HEAD | xz -9 > dromajo-$(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD).tar.xz
-	git tag release-$(shell date +%Y%m%d)
+add_executable(dromajo src/dromajo.cpp)
+target_link_libraries(dromajo dromajo_cosim)
