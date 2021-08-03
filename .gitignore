@@ -5,3 +5,6 @@ dromajo
 libdromajo_cosim.a
 *.swp
 tags
+build
+._.DS_Store
+.DS_Store
