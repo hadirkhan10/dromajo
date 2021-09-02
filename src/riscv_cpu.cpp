@@ -47,6 +47,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <iostream>
 
 #include "LiveCacheCore.h"
 #include "cutils.h"
@@ -1853,6 +1854,8 @@ void riscv_set_debug_mode(RISCVCPUState *s, bool on) { s->debug_mode = on; }
 static void serialize_memory(const void *base, size_t size, const char *file) {
     int f_fd = open(file, O_CREAT | O_WRONLY | O_TRUNC, 0777);
 
+    //std::cout<<"\n\n WRITING TO FILE: "<<file<<" WITH SIZE: "<< size<<std::endl;
+
     if (f_fd < 0)
         err(-3, "trying to write %s", file);
 
@@ -2222,6 +2225,7 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
     n            = strlen(dump_name) + 64;
     char *f_name = (char *)alloca(n);
     snprintf(f_name, n, "%s.bootram", dump_name);
+    //printf("\n\nFILENAME FROM DROMAJO WHEN CREATING BOOTROM: %s\n", f_name);
 
     if (s->priv != 3 || ROM_BASE_ADDR + ROM_SIZE < s->pc) {
         fprintf(dromajo_stderr, "NOTE: creating a new boot rom\n");

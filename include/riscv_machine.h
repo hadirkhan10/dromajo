@@ -53,8 +53,8 @@
 /* Hooks */
 typedef struct RISCVMachineHooks {
     /* Returns -1 if invalid CSR, 0 if OK. */
-    int (*csr_read)(RISCVCPUState *s, uint32_t csr, uint64_t *pval);
-    int (*csr_write)(RISCVCPUState *s, uint32_t csr, uint64_t val);
+    int (*csr_read)(struct RISCVCPUState *s, uint32_t csr, uint64_t *pval);
+    int (*csr_write)(struct RISCVCPUState *s, uint32_t csr, uint64_t val);
 } RISCVMachineHooks;
 
 struct RISCVMachine {
@@ -64,7 +64,7 @@ struct RISCVMachine {
 #ifdef LIVECACHE
     LiveCache *llc;
 #endif
-    RISCVCPUState *cpu_state[MAX_CPUS];
+    struct RISCVCPUState *cpu_state[MAX_CPUS];
     int            ncpus;
     uint64_t       ram_size;
     uint64_t       ram_base_addr;

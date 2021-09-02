@@ -44,6 +44,8 @@
 
 #include "riscv.h"
 
+#include "riscv_machine.h"
+
 #define ROM_SIZE       0x00001000
 #define ROM_BASE_ADDR  0x00010000
 #define BOOT_BASE_ADDR 0x00010000
@@ -308,12 +310,19 @@ void riscv_set_debug_mode(RISCVCPUState *s, bool on);
 
 int riscv_benchmark_exit_code(RISCVCPUState *s);
 
-#include "riscv_machine.h"
+
 void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t clint_base_addr);
 void riscv_cpu_deserialize(RISCVCPUState *s, const char *dump_name);
 
 int riscv_cpu_read_memory(RISCVCPUState *s, mem_uint_t *pval, target_ulong addr, int size_log2);
 int riscv_cpu_write_memory(RISCVCPUState *s, target_ulong addr, mem_uint_t val, int size_log2);
+
+
+//Serialize and deserialize memory
+
+static void serialize_memory(const void *base, size_t size, const char *file);
+static void deserialize_memory(void *base, size_t size, const char *file);
+
 
 #define PHYS_MEM_READ_WRITE(size, uint_type)                                              \
     void      riscv_phys_write_u##size(RISCVCPUState *, target_ulong, uint_type, bool *); \

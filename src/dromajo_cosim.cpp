@@ -27,6 +27,8 @@
 #include "iomem.h"
 #include "riscv_machine.h"
 
+#include "riscv_cpu.h"
+
 #ifdef GOLDMEM_INORDER
 void check_inorder_load(int cid, uint64_t addr, uint8_t sz, uint64_t ld_data, bool io_map);
 void check_inorder_store(int cid, uint64_t addr, uint8_t sz, uint64_t st_data, bool io_map);
@@ -54,7 +56,7 @@ dromajo_cosim_state_t *dromajo_cosim_init(int argc, char *argv[]) {
     m->common.cosim             = true;
     m->common.pending_interrupt = -1;
     m->common.pending_exception = -1;
-
+    //printf("\nDROMAJO SNAPSHOT LOAD NAME: %s\n", m->common.snapshot_load_name);
     return (dromajo_cosim_state_t *)m;
 }
 
@@ -207,6 +209,49 @@ void dromajo_cosim_raise_trap(dromajo_cosim_state_t *state, int hartid, int64_t 
  * time, and instret.  For all these cases the model will override
  * with the expected values.
  */
+
+/*int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc)
+{    
+    RISCVMachine *r = (RISCVMachine *)state;
+    assert(r->ncpus > hartid);
+    RISCVCPUState *s = r->cpu_state[hartid];
+    uint64_t emu_pc;
+    int exit_code = 0x0;
+
+    // Succeed after N instructions without failure. 
+    if (r->common.maxinsns == 0) {
+        return 1;
+    }
+
+    r->common.maxinsns--;
+
+    if (riscv_terminated(s)) {
+        return 1;
+    }
+
+    //Execute 1 instruction
+    do
+    {
+        emu_pc   = riscv_get_pc(s);
+
+        fprintf(dromajo_dump, "DUT_PC %x \t EMU_PC %x \n", dut_pc, emu_pc);
+        riscv_set_pc(s, emu_pc + 4);
+        
+        if(emu_pc == dut_pc)
+            exit_code = 0x1;
+        else if (emu_pc > dut_pc)
+            exit_code = 0x3;
+    
+    }while(emu_pc != dut_pc);
+
+    //riscv_cpu_sync_regs(s);
+    //if (exit_code == 0)
+    //    riscv_cpu_sync_regs(s);
+
+    return exit_code;
+}*/
+
+
 int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc, uint32_t dut_insn, uint64_t dut_wdata,
                        uint64_t dut_mstatus, bool check) {
     RISCVMachine *r = (RISCVMachine *)state;
@@ -220,7 +265,7 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
     bool           verbose        = true;
     int            iregno, fregno;
 
-    /* Succeed after N instructions without failure. */
+    // Succeed after N instructions without failure. 
     if (r->common.maxinsns == 0) {
         return 1;
     }
@@ -235,6 +280,7 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
      * Execute one instruction in the simulator.  Because exceptions
      * may fire, the current instruction may not be executed, thus we
      * have to iterate until one does.
+     *
      */
     iregno = -1;
     fregno = -1;
@@ -248,7 +294,7 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
             emu_insn &= 0xFFFF;
 
         if (emu_pc == dut_pc && emu_insn == dut_insn && is_store_conditional(emu_insn) && dut_wdata != 0) {
-            /* When DUT fails an SC, we must simulate the same behavior */
+            // When DUT fails an SC, we must simulate the same behavior
             iregno = emu_insn >> 7 & 0x1f;
             if (iregno > 0)
                 riscv_set_reg(s, iregno, dut_wdata);
@@ -257,8 +303,8 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
         }
 
         if (r->common.pending_interrupt != -1 && r->common.pending_exception != -1) {
-            /* On the DUT, the interrupt can race the exception.
-               Let's try to match that behavior */
+            // On the DUT, the interrupt can race the exception.
+            //   Let's try to match that behavior 
 
             fprintf(dromajo_stderr, "[DEBUG] DUT also raised exception %d\n", r->common.pending_exception);
             riscv_cpu_interp64(s, 1);  // Advance into the exception
@@ -268,8 +314,8 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
             if (r->common.pending_exception != cause) {
                 char priv = s->priv["US?M"];
 
-                /* Unfortunately, handling the error case is awkward,
-                 * so we just exit from here */
+                // Unfortunately, handling the error case is awkward,
+                // so we just exit from here 
 
                 fprintf(dromajo_stderr, "%d 0x%016" PRIx64 " ", emu_priv, emu_pc);
                 fprintf(dromajo_stderr, "(0x%08x) ", emu_insn);
@@ -445,6 +491,7 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
      * XXX We currently do not compare mstatus because DUT's mstatus
      * varies between pre-commit (all FP instructions) and post-commit
      * (CSR instructions).
+     *
      */
     if (emu_pc != dut_pc || emu_insn != dut_insn && (emu_insn & 3) == 3 ||  // DUT expands all C instructions
         emu_wdata != dut_wdata && emu_wrote_data) {

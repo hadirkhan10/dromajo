@@ -41,6 +41,8 @@
 #include "riscv_machine.h"
 #include "virtio.h"
 
+#include "riscv_cpu.h"
+
 //#define REGRESS_COSIM 1
 #ifdef REGRESS_COSIM
 #include "dromajo_cosim.h"
@@ -155,10 +157,17 @@ int iterate_core(RISCVMachine *m, int hartid) {
     int fregno = riscv_get_most_recently_written_fp_reg(cpu);
 
     if (cpu->pending_exception != -1)
+    {
         fprintf(dromajo_stderr,
                 " exception %d, tval %016" PRIx64,
                 cpu->pending_exception,
                 riscv_get_priv_level(cpu) == PRV_M ? cpu->mtval : cpu->stval);
+        if(cpu->pending_exception == 8) 
+        {
+            fprintf(dromajo_stderr,"\nenvironment call from user mode; exiting");
+            return 0;
+        }
+    }
     else if (iregno > 0)
         fprintf(dromajo_stderr, " x%2d 0x%016" PRIx64, iregno, virt_machine_get_reg(m, hartid, iregno));
     else if (fregno >= 0)

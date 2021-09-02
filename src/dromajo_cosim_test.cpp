@@ -19,6 +19,8 @@
  */
 #include "dromajo_cosim.h"
 
+#include<iostream>
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -47,6 +49,9 @@ int main(int argc, char *argv[]) {
         usage(progname);
 
     char *cmd = argv[1];
+
+    std::cout<<"\nIN cosim_test_main CMD :"<<cmd;
+
     if (strcmp(cmd, "read") == 0)
         cosim = false;
     else if (strcmp(cmd, "cosim") == 0)
@@ -55,6 +60,9 @@ int main(int argc, char *argv[]) {
         usage(progname);
 
     char *trace_name = argv[2];
+
+    std::cout<<"\nIN cosim_test_main trace_name : "<<trace_name;
+
     FILE *f          = fopen(trace_name, "r");
     if (!f) {
         perror(trace_name);
@@ -67,6 +75,8 @@ int main(int argc, char *argv[]) {
         argc -= 2;
         argv += 2;
         argv[0] = progname;
+
+        std::cout<<"\nIN cosim_test_main PROGNAME : "<<progname;
 
         s = dromajo_cosim_init(argc, argv);
         if (!s)
@@ -142,9 +152,14 @@ int main(int argc, char *argv[]) {
             continue;
 
         if (exception && (exception < 8 || exception > 11)) {  // do not skip ECALLS
+            std::cout<<"\nAHHHHHHHH TRAPPING FORM DROMAJO!!!";
             dromajo_cosim_raise_trap(s, hartid, exception);
             fprintf(dromajo_stdout, "exception %d with tval %08" PRIx64 "\n", exception, tval);
             continue;
+            if(exception == 8)
+            {
+                goto ecall;
+            }
         }
         int r = dromajo_cosim_step(s, hartid, insn_addr, insn, wdata, 0, true);
         if (r) {
@@ -159,6 +174,8 @@ done:
 
     if (exit_code == EXIT_SUCCESS)
         fprintf(dromajo_stdout, "\nSUCCESS, PASSED, GOOD!\n");
+    else if(exit_code == 8)
+        fprintf(dromajo_stdout, "\nENCOUNTERED ECALL FROM UMODE\n");
     else
         fprintf(dromajo_stdout, "\nFAIL!\n");
 
@@ -166,6 +183,10 @@ done:
         fclose(dromajo_stdout);
 
     exit(exit_code);
+
+ecall:
+    exit_code = 8; // TEMP - environment call from user mode (yes this is different from unix exit codes)
+    goto done;
 
 fail:
     exit_code = EXIT_FAILURE;

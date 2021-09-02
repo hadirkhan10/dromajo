@@ -16,12 +16,11 @@
 #ifndef DROMAJO_H
 #define DROMAJO_H
 
-#include <stdio.h>
-
-#include "config.h"
 #include "riscv_machine.h"
+#include <stdio.h>
 
 extern FILE *dromajo_stdout;
 extern FILE *dromajo_stderr;
+extern FILE *dromajo_dump;
 
 #endif

@@ -79,6 +79,7 @@
 
 FILE *dromajo_stdout;
 FILE *dromajo_stderr;
+//FILE *dromajo_dump;
 
 typedef struct {
     FILE *stdin, *out;
@@ -570,7 +571,7 @@ static void usage(const char *prog, const char *msg) {
             "       --custom_extension add X extension to misa for all cores\n"
             "       --clear_ids clear mvendorid, marchid, mimpid for all cores\n",
             msg,
-            CONFIG_VERSION,
+            VM_CONFIG_VERSION,
             prog,
             (long)BOOT_BASE_ADDR,
             (long)RAM_BASE_ADDR,
@@ -632,7 +633,7 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
 
     dromajo_stdout = stdout;
     dromajo_stderr = stderr;
-
+    //dromajo_dump = fopen("dromajo_dump_file.txt", "w");
     optind = 0;
 
     for (;;) {
