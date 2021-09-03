@@ -48,7 +48,6 @@
 
 #ifdef SIMPOINT_BB
 FILE *simpoint_bb_file = nullptr;
-int   simpoint_roi     = 0;  // start without ROI enabled
 
 int simpoint_step(RISCVMachine *m, int hartid) {
     assert(hartid == 0);  // Only single core for simpoint creation
@@ -193,11 +192,6 @@ int main(int argc, char **argv) {
     }
 #endif
 
-#ifdef LIVECACHE
-    // m->llc = new LiveCache("LLC", 1024*1024*32); // 32MB LLC (should be ~2x larger than real)
-    m->llc = new LiveCache("LLC", 1024 * 32);  // Small 32KB for testing
-#endif
-
     if (!m)
         return 1;
 
@@ -206,7 +200,7 @@ int main(int argc, char **argv) {
         keep_going = 0;
         for (int i = 0; i < m->ncpus; ++i) keep_going |= iterate_core(m, i);
 #ifdef SIMPOINT_BB
-        if (simpoint_roi) {
+        if (roi_region) {
             if (!simpoint_step(m, 0))
                 break;
         }
@@ -229,10 +223,10 @@ int main(int argc, char **argv) {
 #ifdef LIVECACHE
 #if 0
     // LiveCache Dump
-    int addr_size;
+    uint64_t addr_size;
     uint64_t *addr = m->llc->traverse(addr_size);
 
-    for (int i = 0; i < addr_size; ++i) {
+    for (uint64_t i = 0u; i < addr_size; ++i) {
         printf("addr:%llx %s\n", (unsigned long long)addr[i], (addr[i] & 1) ? "ST" : "LD");
     }
 #endif

@@ -72,8 +72,8 @@ struct FBDevice {
 
 #define VM_CONFIG_VERSION 1
 
+extern int roi_region;
 #ifdef SIMPOINT_BB
-extern int simpoint_roi;
 
 //#define SIMPOINT_SIZE 1000000UL      // For Benchmarking Fine Grain
 //#define SIMPOINT_SIZE 10000UL        // For verification

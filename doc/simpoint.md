@@ -15,9 +15,10 @@ make -C simpoint
 ## Compile dromajo with simpoint
 
 ```
-cd src
-make clean
-make SIMPOINT=1
+mkdir build
+cd build
+cmake -DSIMPOINT=On ../
+make
 ```
 
 
@@ -59,7 +60,7 @@ Dromajo will generate a dromajo_simpoint.bb trace for your execution
 
 ```
 cd run
-../build/dromajo ./boot.cfg
+../build/dromajo ./boot.cfg >run.log
 ```
 
 The simpoint_size constant at dromajo.cpp sets the simpoint size. Make sure
@@ -87,7 +88,7 @@ performance numbers (weights).
 
 The simpoints file should have the list of checkpoints and the location. For
 example, this contents means that there are 15 checkpoints, and the first
-starts at 193*simpoint_size.  The 2nd starts at 89*simpoint_size... All the
+starts at 193 *simpoint_size.  The 2nd starts at 89 *simpoint_size... All the
 checkpoints have the same size of simpoint_size.
 
 ```
@@ -108,30 +109,66 @@ checkpoints have the same size of simpoint_size.
 23 14
 ```
 
+
+The fastest way is to specify the simpoints file, then with a single run  it
+will create all the required checkpoints.
+
 ```
 ../build/dromajo --simpoint simpoints ./boot.cfg
 ```
 
 
+The previous command line will create all the checkpoints after reaching the
+ROI to model. If the ROI starts at 100B, and the first simpoint starts at 200M,
+the first checkpoint will be created at 100B+200M.
+
+
 ## Create a checkpoint for each simpoint manually
 
+It is possible, but slower, to create a checkpoint at a time. To do so, you
+use set maxinsns to include the ROI start point and the simpoint start point.
 
-Given the previous example and simpoint_size of 1M instructions, to create
-the sp01 (89 1 entry), run dromajo:
+Given the previous example and simpoint_size of 1M instructions, you must look
+for at what instruction did the ROI started, to create the sp01 (89 1
+entry), you must add the --maxinsn to be the addition of 89,000,000 and X. E.g:
+
+If ROI start was 185629905:
+```
+grep ROI run.log
+ROI adjust maxinsns to 10000000000
+ROI started (insn=185629905)
+```
 
 ```
-../build/dromajo --save sp01 --maxinsn 89000000 ./boot.cfg
+perl -e "print 89000000+185629905"
+274629905
+
+../build/dromajo --save sp01 --maxinsn 274629905 ./boot.cfg
 ```
 
 Repeat the checkpoint creation for each simpoint, and they are ready.
 
 NOTE: You can use a dromajo with or without SIMPOINT enabled for creating checkpoints. It ill be a bit faster without SIMPOINT.
 
+This means that to create checkpoints, you should use the default dromajo build options:
 ```
-cd src
-make clean
+mkdir build
+cd build
+cmake ../
 make
 ```
+
+If you want the checkpoints to have cache warmup. This enabled the LIVECACHE define to create a smart cache warmup:
+```
+mkdir build
+cd build
+cmake -DWARMUP=On ../
+make
+```
+
+Cache warmup will increase the boomrom size to insert all the memory requests needed. The advantage is that it can reduce the
+simpoint size to have accurate results.
+
 
 ## Run a checkpoint for each simpoint to characterize your application
 
