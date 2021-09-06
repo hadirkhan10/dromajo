@@ -158,6 +158,7 @@ int iterate_core(RISCVMachine *m, int hartid) {
 
     if (cpu->pending_exception != -1)
     {
+        //fprintf(dromajo_stderr, "\nEXCEPTION FROM DROMAJO AAAA INSN: %d \n", insn_raw);
         fprintf(dromajo_stderr,
                 " exception %d, tval %016" PRIx64,
                 cpu->pending_exception,

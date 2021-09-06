@@ -52,6 +52,8 @@ add_compile_options(
         -Wall
         -Wno-parentheses
         -MMD
+        -g
+        -ggdb
         -D_FILE_OFFSET_BITS=64
         -D_LARGEFILE_SOURCE
         -D_GNU_SOURCE

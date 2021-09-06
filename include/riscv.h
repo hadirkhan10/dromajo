@@ -153,7 +153,7 @@ typedef enum {
 #define CSR_PMPCFG(n)  (0x3A0 + (n))  // n = 0 or 2
 #define CSR_PMPADDR(n) (0x3B0 + (n))  // n = 0..15
 
-#define PMP_N 8  // Spec defines 16, we implement 8
+#define PMP_N 0  // Spec defines 16, we implement 8
 
 typedef enum {
     PMPCFG_R       = 1,  // NB: the three bottom bits follow the standard permissions order

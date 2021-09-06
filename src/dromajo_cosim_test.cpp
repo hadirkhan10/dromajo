@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
 
     char *trace_name = argv[2];
 
-    std::cout<<"\nIN cosim_test_main trace_name : "<<trace_name;
+    std::cout<<"\nIN cosim_test_main trace_name : "<<trace_name<<std::endl;
 
     FILE *f          = fopen(trace_name, "r");
     if (!f) {

@@ -188,6 +188,10 @@ static inline uint64_t track_iread(RISCVCPUState *s, uint64_t vaddr, uint64_t pa
  * modes, which by default have none, and can revoke permissions from
  * M-mode, which by default has full permissions." */
 bool riscv_cpu_pmp_access_ok(RISCVCPUState *s, uint64_t paddr, size_t size, pmpcfg_t perm) {
+
+    //Hack for Ariane
+    return true;
+
     int priv;
 
     /* rv64mi-p-access expects illegal physical addresses to fail. */
@@ -1024,6 +1028,8 @@ static int csr_read(RISCVCPUState *s, target_ulong *pval, uint32_t csr, BOOL wil
         case 0x33e:
         case 0x33f: val = s->mhpmevent[csr & 0x1F]; break;
 
+        // Ariane doesnt have PMP. Commenting.
+
         case CSR_PMPCFG(0):  // NB: 1 and 3 are _illegal_ in RV64
         case CSR_PMPCFG(2): val = s->csr_pmpcfg[csr - CSR_PMPCFG(0)]; break;
 
@@ -1083,6 +1089,8 @@ static int get_insn_rm(RISCVCPUState *s, unsigned int rm) {
 }
 #endif
 
+
+// PMP not used in ariane; commeting
 static void unpack_pmpaddrs(RISCVCPUState *s) {
     uint8_t cfg;
     s->pmp_n = 0;
@@ -1137,6 +1145,8 @@ static void unpack_pmpaddrs(RISCVCPUState *s) {
 
     tlb_flush_all(s);  // The TLB partically caches PMP decisions
 }
+
+
 
 /* return -1 if invalid CSR, 0 if OK, -2 if CSR raised an exception,
  * 2 if TLBs have been flushed. */
@@ -1313,6 +1323,8 @@ static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val) {
         case 0x33e:
         case 0x33f: s->mhpmevent[csr & 0x1F] = val & (HPM_EVENT_SETMASK | HPM_EVENT_EVENTMASK); break;
 
+        // Ariane doesn't have PMP. commenting this.
+
         case CSR_PMPCFG(0):  // NB: 1 and 3 are _illegal_ in RV64
         case CSR_PMPCFG(2): {
             assert(PMP_N % 8 == 0);
@@ -1362,7 +1374,8 @@ static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val) {
             s->csr_pmpaddr[csr - CSR_PMPADDR(0)] = val & PMPADDR_MASK;
             unpack_pmpaddrs(s);
             break;
-
+        
+       
         case 0xb00: /* mcycle */ s->mcycle = val; break;
         case 0xb02: /* minstret */ s->minstret = val; break;
         case 0xb03:
@@ -1981,6 +1994,10 @@ static void create_hang_nonzero_hart(uint32_t *rom, uint32_t *code_pos, uint32_t
                                       // 1:
 }
 
+/*  Change which CSR regs are tracked. Only ones in Ariane need to be tracked and restored.
+    Might need to change the serialize and deserialize CPU functions to match too.
+*/
+
 static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t clint_base_addr) {
     uint32_t rom[ROM_SIZE / 4];
     memset(rom, 0, sizeof rom);
@@ -2057,28 +2074,28 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     // Cycle and instruction are alias across modes. Just write to m-mode counter
     // Already done before CLINT. create_csr64_recovery(rom, &code_pos, &data_pos, 0xb00, s->insn_counter); // mcycle
     // create_csr64_recovery(rom, &code_pos, &data_pos, 0xb02, s->insn_counter); // instret
-
+    
     for (int i = 3; i < 32; ++i) {
-        create_csr12_recovery(rom, &code_pos, 0xb00 + i, 0);                           // reset mhpmcounter3..31
-        create_csr64_recovery(rom, &code_pos, &data_pos, 0x320 + i, s->mhpmevent[i]);  // mhpmevent3..31
+        create_csr12_recovery(rom, &code_pos, 0xb00 + i, 0);                           // reset mhpmcounter17..31
+        //create_csr64_recovery(rom, &code_pos, &data_pos, 0x320 + i, s->mhpmevent[i]);  // mhpmevent17..31
     }
-    create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a0, s->tselect);  // tselect
-    // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a1, s->tdata1); // tdata1
-    // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a2, s->tdata2); // tdata2
-    // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a3, s->tdata3); // tdata3
+    create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a0, s->tselect);  // tselect - not implemented in ariane
+    // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a1, s->tdata1); // tdata1 - not imeplemented in ariane
+    // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a2, s->tdata2); // tdata2 - not imeplemented in ariane
+    // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a3, s->tdata3); // tdata3 - not imeplemented in ariane
 
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x302, s->medeleg);
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x303, s->mideleg);
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x304, s->mie);  // mie & sie
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x305, s->mtvec);
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x105, s->stvec);
-    create_csr12_recovery(rom, &code_pos, 0x320, s->mcountinhibit);
+    //create_csr12_recovery(rom, &code_pos, 0x320, s->mcountinhibit);
     create_csr12_recovery(rom, &code_pos, 0x306, s->mcounteren);
     create_csr12_recovery(rom, &code_pos, 0x106, s->scounteren);
 
     // NB: restore addr before cfgs for fewer surprises!
-    for (int i = 0; i < 16; ++i) create_csr64_recovery(rom, &code_pos, &data_pos, CSR_PMPADDR(i), s->csr_pmpaddr[i]);
-    for (int i = 0; i < 4; i += 2) create_csr64_recovery(rom, &code_pos, &data_pos, CSR_PMPCFG(i), s->csr_pmpcfg[i]);
+    //for (int i = 0; i < 16; ++i) create_csr64_recovery(rom, &code_pos, &data_pos, CSR_PMPADDR(i), s->csr_pmpaddr[i]);
+    //for (int i = 0; i < 4; i += 2) create_csr64_recovery(rom, &code_pos, &data_pos, CSR_PMPCFG(i), s->csr_pmpcfg[i]);
 
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x340, s->mscratch);
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x341, s->mepc);
@@ -2212,7 +2229,7 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
 
             char *f_name = (char *)alloca(strlen(dump_name) + 64);
             sprintf(f_name, "%s.mainram", dump_name);
-
+            //printf("\n\n CREATING MAINRAM SIZE : %lu", pr->size);
             serialize_memory(pr->phys_mem, pr->size, f_name);
         }
     }
@@ -2257,7 +2274,7 @@ void riscv_cpu_deserialize(RISCVCPUState *s, const char *dump_name) {
             size_t n         = strlen(dump_name) + 64;
             char * main_name = (char *)alloca(n);
             snprintf(main_name, n, "%s.mainram", dump_name);
-
+            //printf("\n\n GETTING MAINRAM SIZE : %lu", pr->size);
             deserialize_memory(pr->phys_mem, pr->size, main_name);
         }
     }
