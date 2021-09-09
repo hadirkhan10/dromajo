@@ -152,8 +152,8 @@ int main(int argc, char *argv[]) {
             continue;
 
         if (exception && (exception < 8 || exception > 11)) {  // do not skip ECALLS
-            std::cout<<"\nAHHHHHHHH TRAPPING FORM DROMAJO!!!";
-            dromajo_cosim_raise_trap(s, hartid, exception);
+            std::cout<<"\nTRAPPING FORM DROMAJO!!!";
+            dromajo_cosim_raise_trap(s, hartid, insn_addr, insn, exception);
             fprintf(dromajo_stdout, "exception %d with tval %08" PRIx64 "\n", exception, tval);
             continue;
             if(exception == 8)

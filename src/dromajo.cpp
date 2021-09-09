@@ -165,7 +165,8 @@ int iterate_core(RISCVMachine *m, int hartid) {
                 riscv_get_priv_level(cpu) == PRV_M ? cpu->mtval : cpu->stval);
         if(cpu->pending_exception == 8) 
         {
-            fprintf(dromajo_stderr,"\nenvironment call from user mode; exiting");
+            fprintf(dromajo_stderr, "\nECALL (UMODE) PC: 0x%016x INSN: 0x%08x", last_pc, insn_raw);
+            fprintf(dromajo_stderr,"\nEnvironment call from user mode; exiting");
             return 0;
         }
     }

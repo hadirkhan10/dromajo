@@ -36,6 +36,7 @@ void check_inorder_amo(int cid, uint64_t addr, uint8_t sz, uint64_t st_data, uin
 void check_inorder_init(int ncores);
 #endif
 
+
 /*
  * dromajo_cosim_init --
  *
@@ -59,6 +60,23 @@ dromajo_cosim_state_t *dromajo_cosim_init(int argc, char *argv[]) {
     //printf("\nDROMAJO SNAPSHOT LOAD NAME: %s\n", m->common.snapshot_load_name);
     return (dromajo_cosim_state_t *)m;
 }
+
+
+/*  dromajo_cosim_front_init
+*/
+dromajo_cosim_front_step_t* dormajo_cosim_front_init(dromajo_cosim_front_step_t* front_pointer)
+{
+    front_pointer = (dromajo_cosim_front_step_t*) malloc(sizeof(dromajo_cosim_front_step_t));
+    front_pointer->plus_pc = 0;
+    front_pointer->plus_insn = 0;
+    front_pointer->plus_wdata = 0;
+    front_pointer->most_recently_written_fp_reg = -1;
+    front_pointer->most_recently_written_reg = -1;
+    front_pointer->status_code = 0;
+    front_pointer->interp64_status = 0;
+    return front_pointer;
+}
+
 
 void dromajo_cosim_fini(dromajo_cosim_state_t *state) { virt_machine_end((RISCVMachine *)state); }
 
@@ -181,9 +199,15 @@ static inline void handle_dut_overrides(RISCVCPUState *s, uint64_t mmio_start, u
  * MSB indicates an asynchronous interrupt, synchronous exception
  * otherwise.
  */
-void dromajo_cosim_raise_trap(dromajo_cosim_state_t *state, int hartid, int64_t cause) {
+void dromajo_cosim_raise_trap(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc, uint32_t dut_insn, int64_t cause) {
+    uint64_t emu_pc;
+    uint32_t emu_insn;
     VirtMachine *m = (VirtMachine *)state;
-
+    RISCVMachine *r = (RISCVMachine *)state;
+    assert(r->ncpus > hartid);
+    RISCVCPUState *s = r->cpu_state[hartid];
+    emu_pc   = riscv_get_pc(s);
+    riscv_read_insn(s, &emu_insn, emu_pc);
     if (cause < 0) {
         assert(m->pending_interrupt == -1);
         m->pending_interrupt = cause & 63;
@@ -191,8 +215,281 @@ void dromajo_cosim_raise_trap(dromajo_cosim_state_t *state, int hartid, int64_t 
     } else {
         m->pending_exception = cause;
         fprintf(dromajo_stderr, "[DEBUG] DUT raised exception %d\n", m->pending_exception);
+        if(cause == 8){
+            fprintf(dromajo_stderr, "[DEBUG] UMODE-ECALL: DUT PC: 0x%016x EMU PC: 0x%016x\tDUT INSN: 0x%08x EMU INSN: 0x%08x\n", dut_pc, emu_pc, dut_insn, emu_insn);
+        }
     }
 }
+
+/*  dromajo_cosim_front_step
+*   This function checks if fetches are correct with input from the frontend.
+*   It will maintain a separate cosim state which will be passed to it.
+*   It also takes hartID and fetch address as arguemnts.
+*   It checks DUT fetch address with what dromajo does next and returns 0
+*   if it matches and other values if incorrect, in dromajo_cosim_front_step_t
+*   Other return codes: 1 -> Success end, end now; -1 -> address way off(mpdt).
+*   TODO: add c-type support;
+*   Further modifications can be made.
+*   
+*   This is a test version.
+*
+void dromajo_cosim_front_step(dromajo_cosim_state_t* state, dromajo_cosim_front_step_t* front_returner, int hartid, uint64_t dut_fetch_addr)
+{
+    RISCVMachine *r = (RISCVMachine *)state;
+    assert(r->ncpus > hartid);
+    RISCVCPUState *s = r->cpu_state[hartid];
+    front_returner->exit_code = 0;
+
+    // Succeed after N instructions without failure. 
+    if (r->common.maxinsns == 0) {
+        front_returner->exit_code = 1;
+    }
+    r->common.maxinsns--;
+
+    front_returner->emu_pc = riscv_get_pc(s);
+    riscv_read_insn(s, &front_returner->emu_insn, front_returner->emu_pc);
+    riscv_set_pc(s,(front_returner->emu_pc + 4));
+
+    if(front_returner->emu_pc != dut_fetch_addr)
+    {
+        front_returner->exit_code = -1;
+    }
+}
+*
+*   Another test version:
+*
+*
+
+int dromajo_cosim_front_step(dromajo_cosim_state_t* state, dromajo_cosim_front_step_t* front_returner, int hartid, 
+                                uint64_t dut_fetch_addr,
+                                bool check)
+{
+    RISCVMachine *r = (RISCVMachine *)state;
+    assert(r->ncpus > hartid);
+    RISCVCPUState *s = r->cpu_state[hartid];
+    uint64_t       emu_pc, emu_wdata = 0;
+    int            emu_priv;
+    uint32_t       emu_insn;
+    bool           emu_wrote_data = false;
+    int            exit_code      = 0;
+    bool           verbose        = true;
+    int            iregno, fregno;
+
+    //  temp vars used instead of dut values.
+    int tmp_iregno, tmp_fregno, tmp_dut_wrote_data = 0;
+    uint64_t tmp_dut_wdata = 0, tmp_dut_mstatus = 0;
+    uint32_t tmp_dut_insn;
+
+    // Succeed after N instructions without failure. 
+    if (r->common.maxinsns == 0) {
+        return 1;
+    }
+
+    r->common.maxinsns--;
+
+    if (riscv_terminated(s)) {
+        return 1;
+    }
+
+    /* temp vars to use instead of dut values as we don't have those.
+    *  assignment is done here.
+    *
+   
+    if (riscv_cpu_interp64(s_plus_one, 1) != 0) {
+        tmp_iregno = riscv_get_most_recently_written_reg(s_plus_one);
+        tmp_fregno = riscv_get_most_recently_written_fp_reg(s_plus_one);
+    }
+
+    if (tmp_iregno > 0) {
+        tmp_dut_wdata      = riscv_get_reg(s, tmp_iregno);
+        tmp_dut_wrote_data = 1;
+    } else if (tmp_fregno >= 0) {
+        tmp_dut_wdata      = riscv_get_fpreg(s, tmp_fregno);
+        tmp_dut_wrote_data = 1;
+    }
+
+    riscv_read_insn(s, &tmp_dut_insn, dut_fetch_addr); //FIXME: for compressed.
+
+    /*
+     * Execute one instruction in the simulator.  Because exceptions
+     * may fire, the current instruction may not be executed, thus we
+     * have to iterate until one does.
+     *
+     *
+    iregno = -1;
+    fregno = -1;
+
+    for (;;) {
+        emu_priv = riscv_get_priv_level(s);
+        emu_pc   = riscv_get_pc(s);
+        riscv_read_insn(s, &emu_insn, emu_pc);
+
+        front_returner->emu_pc = emu_pc;
+        front_returner->emu_insn = emu_insn;
+
+        if ((emu_insn & 3) != 3)
+            emu_insn &= 0xFFFF;
+
+        if(r->common.pending_exception == 8) {
+            //fprintf(dromajo_stderr, "[DEBUG] ECALL AT DUT PC: 0x%016x EMU PC: 0x%016x \tDUT INSN: 0x%08x EMU INSN: 0x%08x\n", dut_fetch_addr, emu_pc, dut_insn, emu_insn);
+            exit_code = ((r->common.pending_exception) * -1);
+            return exit_code;
+        }
+
+        if (emu_pc == dut_fetch_addr && emu_insn == tmp_dut_insn && is_store_conditional(emu_insn) && tmp_dut_wdata != 0) {
+            // When DUT fails an SC, we must simulate the same behavior
+            iregno = emu_insn >> 7 & 0x1f;
+            if (iregno > 0)
+                riscv_set_reg(s, iregno, tmp_dut_wdata);
+            riscv_set_pc(s, emu_pc + 4);
+            break;
+        }
+
+        if (r->common.pending_interrupt != -1 && r->common.pending_exception != -1) {
+            // On the DUT, the interrupt can race the exception.
+            //   Let's try to match that behavior 
+
+            fprintf(dromajo_stderr, "[DEBUG] DUT also raised exception %d\n", r->common.pending_exception);
+            riscv_cpu_interp64(s, 1);  // Advance into the exception
+
+            int cause = s->priv == PRV_S ? s->scause : s->mcause;
+
+            if (r->common.pending_exception != cause) {
+                char priv = s->priv["US?M"];
+
+                // Unfortunately, handling the error case is awkward,
+                // so we just exit from here 
+
+                fprintf(dromajo_stderr, "%d 0x%016" PRIx64 " ", emu_priv, emu_pc);
+                fprintf(dromajo_stderr, "(0x%08x) ", emu_insn);
+                fprintf(dromajo_stderr,
+                        "[error] EMU %cCAUSE %d != DUT %cCAUSE %d\n",
+                        priv,
+                        cause,
+                        priv,
+                        r->common.pending_exception);
+
+                return 0x1FFF;
+            }
+        }
+
+        if (r->common.pending_interrupt != -1) {
+            riscv_cpu_set_mip(s, riscv_cpu_get_mip(s) | 1 << r->common.pending_interrupt);
+            fprintf(dromajo_stderr,
+                    "[DEBUG] Interrupt: MIP <- %d: Now MIP = %x\n",
+                    r->common.pending_interrupt,
+                    riscv_cpu_get_mip(s));
+        }
+
+        if (riscv_cpu_interp64(s, 1) != 0) {
+            iregno = riscv_get_most_recently_written_reg(s);
+            fregno = riscv_get_most_recently_written_fp_reg(s);
+
+            //// ABE: I think this is the solution
+            // r->common.pending_interrupt = -1;
+            // r->common.pending_exception = -1;
+
+            break;
+        }
+
+        r->common.pending_interrupt = -1;
+        r->common.pending_exception = -1;
+    }
+
+    if (check)
+        handle_dut_overrides(s, r->mmio_start, r->mmio_end, emu_priv, emu_pc, emu_insn, emu_wdata, tmp_dut_wdata);
+
+    if (verbose) {
+        fprintf(dromajo_stderr, "%d 0x%016" PRIx64 " ", emu_priv, emu_pc);
+        fprintf(dromajo_stderr, "(0x%08x) ", emu_insn);
+    }
+
+    if (iregno > 0) {
+        emu_wdata      = riscv_get_reg(s, iregno);
+        emu_wrote_data = 1;
+        if (verbose)
+            fprintf(dromajo_stderr, "x%-2d 0x%016" PRIx64, iregno, emu_wdata);
+    } else if (fregno >= 0) {
+        emu_wdata      = riscv_get_fpreg(s, fregno);
+        emu_wrote_data = 1;
+        if (verbose)
+            fprintf(dromajo_stderr, "f%-2d 0x%016" PRIx64, fregno, emu_wdata);
+    } else if (verbose)
+        fprintf(dromajo_stderr, "                      ");
+
+    if (verbose)
+        fprintf(dromajo_stderr, " DASM(0x%08x)\n", emu_insn);
+
+    if (!check)
+        return 0;
+
+    uint64_t emu_mstatus = riscv_cpu_get_mstatus(s);
+
+    /*
+     * XXX We currently do not compare mstatus because DUT's mstatus
+     * varies between pre-commit (all FP instructions) and post-commit
+     * (CSR instructions).
+     *
+     *
+    if (emu_pc != dut_fetch_addr || emu_insn != tmp_dut_insn && (emu_insn & 3) == 3 ||  // DUT expands all C instructions
+        emu_wdata != tmp_dut_wdata && emu_wrote_data) {
+        fprintf(dromajo_stderr, "[error] EMU PC %016" PRIx64 ", DUT PC %016" PRIx64 "\n", emu_pc, dut_fetch_addr);
+        fprintf(dromajo_stderr, "[error] EMU INSN %08x, DUT INSN %08x\n", emu_insn, tmp_dut_insn);
+        if (emu_wrote_data)
+            fprintf(dromajo_stderr, "[error] EMU WDATA %016" PRIx64 ", DUT WDATA %016" PRIx64 "\n", emu_wdata, tmp_dut_wdata);
+        fprintf(dromajo_stderr, "[error] EMU MSTATUS %08" PRIx64 ", DUT MSTATUS %08" PRIx64 "\n", emu_mstatus, tmp_dut_mstatus);
+        fprintf(dromajo_stderr,
+                "[error] DUT pending exception %d pending interrupt %d\n",
+                r->common.pending_exception,
+                r->common.pending_interrupt);
+        exit_code = 0x1FFF;
+    }
+
+    riscv_cpu_sync_regs(s);
+
+    if (exit_code == 0)
+        riscv_cpu_sync_regs(s);
+
+    return exit_code;
+}
+*   AND ANOTHER ONE
+*
+*/
+
+void dromajo_cosim_front_step(dromajo_cosim_state_t* state_plus, dromajo_cosim_front_step_t* front_returner, 
+                                int hartid, uint64_t dut_fetch_addr)
+{
+    RISCVMachine *r_plus = (RISCVMachine *)state_plus;
+    assert(r_plus->ncpus > hartid);
+    RISCVCPUState *s_plus = r_plus->cpu_state[hartid];
+    
+    // Assigning temp values
+
+    front_returner->plus_pc = riscv_get_pc(s_plus);
+
+    if(front_returner->plus_pc != dut_fetch_addr)
+        front_returner->status_code = 1;
+
+    riscv_read_insn(s_plus, &front_returner->plus_insn , front_returner->plus_pc);
+    
+    front_returner->interp64_status = riscv_cpu_interp64(s_plus, 1);
+
+    if (front_returner->interp64_status != 0) {
+        front_returner->most_recently_written_reg = riscv_get_most_recently_written_reg(s_plus);
+        front_returner->most_recently_written_fp_reg = riscv_get_most_recently_written_fp_reg(s_plus);
+        if (front_returner->most_recently_written_reg > 0) {
+            front_returner->plus_wdata = riscv_get_reg(s_plus, front_returner->most_recently_written_reg);
+            front_returner->status_code = 2;
+        } else if (front_returner->most_recently_written_fp_reg >= 0) {
+            front_returner->plus_wdata      = riscv_get_fpreg(s_plus, front_returner->most_recently_written_fp_reg);
+            front_returner->status_code = 2;
+        }
+    } else
+        front_returner->status_code = 3;
+}
+
+
+
 
 /*
  * dromajo_cosim_step --
@@ -292,6 +589,12 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
 
         if ((emu_insn & 3) != 3)
             emu_insn &= 0xFFFF;
+
+        if(r->common.pending_exception == 8) {
+            //fprintf(dromajo_stderr, "[DEBUG] ECALL AT DUT PC: 0x%016x EMU PC: 0x%016x \tDUT INSN: 0x%08x EMU INSN: 0x%08x\n", dut_pc, emu_pc, dut_insn, emu_insn);
+            exit_code = ((r->common.pending_exception) * -1);
+            return exit_code;
+        }
 
         if (emu_pc == dut_pc && emu_insn == dut_insn && is_store_conditional(emu_insn) && dut_wdata != 0) {
             // When DUT fails an SC, we must simulate the same behavior

@@ -26,6 +26,18 @@ extern "C" {
 #endif
 typedef struct dromajo_cosim_state_st dromajo_cosim_state_t;
 
+typedef struct Dromajo_cosim_front_step_t
+{
+    uint64_t plus_pc;
+    uint32_t plus_insn;
+    int most_recently_written_reg;
+    int most_recently_written_fp_reg;
+    uint64_t plus_wdata;
+    int status_code;
+    int interp64_status;
+} dromajo_cosim_front_step_t;
+
+
 /*
  * dromajo_cosim_init --
  *
@@ -33,6 +45,12 @@ typedef struct dromajo_cosim_state_st dromajo_cosim_state_t;
  * Returns NULL upon failure.
  */
 dromajo_cosim_state_t *dromajo_cosim_init(int argc, char *argv[]);
+
+/* dromajo_cosim_front_init
+*/
+
+dromajo_cosim_front_step_t* dormajo_cosim_front_init(dromajo_cosim_front_step_t* front_pointer);
+
 
 /*
  * dromajo_cosim_fini --
@@ -65,7 +83,17 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state,
                        bool                   check);
 
 
+
+
 //int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc);
+/*  Dormajo Cosim Front Step.
+*   This function is to cosimulate and check fetch addresses. 
+*   It takes the state, hartID, and fetch address as arguements
+*   returns 0 if correct, and not 0 if not, enclonsed in dromajo_cosim_front_step_t
+*/
+void dromajo_cosim_front_step(dromajo_cosim_state_t* state_plus, dromajo_cosim_front_step_t* front_returner, 
+                                int hartid, uint64_t dut_fetch_addr); 
+
 
 /*
  * dromajo_cosim_raise_trap --
@@ -76,6 +104,8 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state,
  */
 void dromajo_cosim_raise_trap(dromajo_cosim_state_t *state,
                               int                   hartid,
+                              uint64_t              dut_pc,
+                              uint32_t              dut_insn,
                               int64_t               cause);
 #ifdef __cplusplus
 } // extern C
