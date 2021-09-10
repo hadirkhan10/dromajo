@@ -318,7 +318,7 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
     uint32_t       emu_insn;
     bool           emu_wrote_data = false;
     int            exit_code      = 0;
-    bool           verbose        = false;
+    bool           verbose        = true;
     int            iregno, fregno;
 
     // Succeed after N instructions without failure. 
