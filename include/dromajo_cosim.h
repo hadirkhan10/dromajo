@@ -37,6 +37,7 @@ typedef struct Dromajo_cosim_front_step_t
     int interp64_status;
     uint64_t plus_prev_pc;
     int plus_prev_delta;
+    int plus_priv;
 } dromajo_cosim_front_step_t;
 
 

@@ -248,6 +248,7 @@ void dromajo_cosim_front_step(dromajo_cosim_state_t* state_plus, dromajo_cosim_f
     // Assigning temp values
 
     front_returner->plus_pc = riscv_get_pc(s_plus);
+    front_returner->plus_priv = riscv_get_priv_level(s_plus);
 
     //  if PCs are not equal, wait for machine to fix iteself.
     //  DUT can be ahead or behind, doesn't matter, it must execute
@@ -318,7 +319,7 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
     uint32_t       emu_insn;
     bool           emu_wrote_data = false;
     int            exit_code      = 0;
-    bool           verbose        = true;
+    bool           verbose        = false;
     int            iregno, fregno;
 
     // Succeed after N instructions without failure. 
