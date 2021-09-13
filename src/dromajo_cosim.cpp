@@ -225,15 +225,6 @@ void dromajo_cosim_raise_trap(dromajo_cosim_state_t *state, int hartid, uint64_t
 
 /*  dromajo_cosim_front_step
 *   This function checks if fetches are correct with input from the frontend.
-*   It will maintain a separate cosim state which will be passed to it.
-*   It also takes hartID and fetch address as arguemnts.
-*   It checks DUT fetch address with what dromajo does next and returns 0
-*   if it matches and other values if incorrect, in dromajo_cosim_front_step_t
-*   Other return codes: 1 -> Success end, end now; -1 -> address way off(mpdt).
-*   TODO: add c-type support;
-*   Further modifications can be made.
-*   
-*   This is a test version.
 *
 *
 */

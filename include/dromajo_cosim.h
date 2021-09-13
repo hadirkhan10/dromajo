@@ -26,6 +26,8 @@ extern "C" {
 #endif
 typedef struct dromajo_cosim_state_st dromajo_cosim_state_t;
 
+//  Struct for MPDT cosim
+
 typedef struct Dromajo_cosim_front_step_t
 {
     uint64_t plus_pc;
