@@ -283,7 +283,7 @@ void dromajo_cosim_front_step(dromajo_cosim_state_t* state_plus, dromajo_cosim_f
     }
     else if (dut_fetch_addr > front_returner->plus_pc)
     {
-        front_returner->plus_prev_delta = front_returner->plus_pc - dut_fetch_addr;
+        front_returner->plus_prev_delta = dut_fetch_addr - front_returner->plus_pc;
         front_returner->status_code = -2;
     }
 }
