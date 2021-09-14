@@ -79,6 +79,16 @@ dromajo_cosim_front_step_t* dormajo_cosim_front_init(dromajo_cosim_front_step_t*
     return front_pointer;
 }
 
+dromajo_cosim_front_minus_t* dromajo_front_minus_init(dromajo_cosim_front_minus_t* front_pointer)
+{
+    front_pointer = (dromajo_cosim_front_minus_t*) malloc(sizeof(dromajo_cosim_front_minus_t));
+    front_pointer->minus_pc = 0;
+    front_pointer->minus_insn = 0;
+    front_pointer->minus_prev_delta = 0;
+    front_pointer->minus_priv = 0;
+    return front_pointer;
+}
+
 
 void dromajo_cosim_fini(dromajo_cosim_state_t *state) { virt_machine_end((RISCVMachine *)state); }
 
@@ -280,6 +290,41 @@ void dromajo_cosim_front_step(dromajo_cosim_state_t* state_plus, dromajo_cosim_f
 }
 
 
+//  Dromajo front returner minus
+
+void dromajo_front_returner_minus(dromajo_cosim_state_t* state_minus, dromajo_cosim_front_minus_t* front_returner, 
+                                int hartid, uint64_t dut_fetch_addr)
+{
+    RISCVMachine *r_minus = (RISCVMachine *)state_minus;
+    assert(r_minus->ncpus > hartid);
+    RISCVCPUState *s_minus = r_minus->cpu_state[hartid];
+    
+    // Assigning temp values
+
+    front_returner->minus_pc = riscv_get_pc(s_minus);
+    front_returner->minus_priv = riscv_get_priv_level(s_minus);
+
+    //  if PCs are not equal, wait for machine to fix iteself.
+    //  DUT can be ahead or behind, doesn't matter, it must execute
+    //  the PC that dromajo is at. Wait until then.
+
+    if(front_returner->minus_pc == dut_fetch_addr)
+    {
+        //front_returner->status_code += 1;
+        front_returner->minus_prev_delta = 0;    
+        riscv_read_insn(s_minus, &front_returner->minus_insn , front_returner->minus_pc);
+    }
+    else if (dut_fetch_addr < front_returner->minus_pc)
+    {
+        front_returner->minus_prev_delta = front_returner->minus_pc - dut_fetch_addr;
+        //front_returner->status_code = -1;
+    }
+    else if (dut_fetch_addr > front_returner->minus_pc)
+    {
+        front_returner->minus_prev_delta = dut_fetch_addr - front_returner->minus_pc;
+        //front_returner->status_code = -2;
+    }
+}    
 
 
 /*

@@ -42,6 +42,13 @@ typedef struct Dromajo_cosim_front_step_t
     int plus_priv;
 } dromajo_cosim_front_step_t;
 
+typedef struct Dromajo_cosim_front_minus_t
+{
+    uint64_t minus_pc;
+    uint32_t minus_insn;
+    int minus_prev_delta;
+    int minus_priv;
+} dromajo_cosim_front_minus_t;
 
 /*
  * dromajo_cosim_init --
@@ -55,6 +62,11 @@ dromajo_cosim_state_t *dromajo_cosim_init(int argc, char *argv[]);
 */
 
 dromajo_cosim_front_step_t* dormajo_cosim_front_init(dromajo_cosim_front_step_t* front_pointer);
+
+dromajo_cosim_front_minus_t* dromajo_front_minus_init(dromajo_cosim_front_minus_t* front_pointer);
+
+void dromajo_front_returner_minus(dromajo_cosim_state_t* state_minus, dromajo_cosim_front_minus_t* front_returner, 
+                                int hartid, uint64_t dut_fetch_addr);
 
 
 /*
