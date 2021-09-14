@@ -303,6 +303,7 @@ void dromajo_front_returner_minus(dromajo_cosim_state_t* state_minus, dromajo_co
 
     front_returner->minus_pc = riscv_get_pc(s_minus);
     front_returner->minus_priv = riscv_get_priv_level(s_minus);
+    riscv_read_insn(s_minus, &front_returner->minus_insn , front_returner->minus_pc);
 
     //  if PCs are not equal, wait for machine to fix iteself.
     //  DUT can be ahead or behind, doesn't matter, it must execute
@@ -312,7 +313,7 @@ void dromajo_front_returner_minus(dromajo_cosim_state_t* state_minus, dromajo_co
     {
         //front_returner->status_code += 1;
         front_returner->minus_prev_delta = 0;    
-        riscv_read_insn(s_minus, &front_returner->minus_insn , front_returner->minus_pc);
+        //riscv_read_insn(s_minus, &front_returner->minus_insn , front_returner->minus_pc);
     }
     else if (dut_fetch_addr < front_returner->minus_pc)
     {
