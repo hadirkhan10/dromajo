@@ -59,6 +59,14 @@
 #define FLEN 64
 #endif /* !FLEN */
 
+typedef struct mem_loc_t
+{
+    uint64_t    diff;
+    bool        is_ram;
+};
+
+static void init_mem_loc_t(mem_loc_t *mem_loc, int size);
+
 #define DUMP_INVALID_MEM_ACCESS
 #define DUMP_MMU_EXCEPTIONS
 //#define DUMP_INTERRUPTS

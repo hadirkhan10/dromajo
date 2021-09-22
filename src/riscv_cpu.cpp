@@ -44,10 +44,13 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
+#include <fstream>
+#include <iomanip>
 
 #include "LiveCacheCore.h"
 #include "cutils.h"
@@ -1896,6 +1899,98 @@ static void deserialize_memory(void *base, size_t size, const char *file) {
     close(f_fd);
 }
 
+/*
+static void dump_mainram(const void* base, size_t size, const char *file)
+{
+    uint8_t val = 0;
+    FILE* fd_mainram = fopen(file, "w");
+    if(fd_mainram == NULL)
+        err(-3, "cant open mainram file: %s", file);
+
+    printf("\ndumping mainram file: %s with size: %ld\n", file, size);
+    uint8_t* mem_ptr = (uint8_t*) base;
+    for(; size != 0 ;)
+    {
+        val = *mem_ptr;
+        fprintf(fd_mainram, "%02x", val);
+        mem_ptr++;
+        size -= 1;
+        if((size % 65536) == 0)
+            printf("size: %ld\n", size);
+    }
+    fclose(fd_mainram);
+}
+
+/*
+static void dump_mainram(const void* base, size_t size, const char *file)
+{
+    size_t dump_chunk = 1; //1 byte
+    uint8_t* mem_ptr = (uint8_t*) base;
+    uint64_t counter = 0;
+    FILE *out = fopen(file, "wb");
+    if(out != NULL)
+    {
+        size_t to_go = size;
+        while(to_go > 0)
+        {
+            uint8_t* temp_ptr= mem_ptr;
+            counter +=1;
+            if((counter > 8000) && (counter < 9000))
+            {
+                if(*temp_ptr != 0)
+                    printf("\nAt counter: %ld value: %0x", counter, *temp_ptr);
+            }
+            const size_t wrote = fwrite(temp_ptr, dump_chunk, 1, out);
+            //if(wrote == 0)
+            //    break;
+            mem_ptr++;
+            to_go -= dump_chunk;
+        }
+        fclose(out);
+    }
+
+}
+*/
+
+
+/*
+static void dump_hex_memory(const void *base, size_t size, const char *file)
+{
+    uint8_t* mem_pointer = (uint8_t*)base;
+
+    std::ofstream hex_file;
+    hex_file.open(file);
+
+    int num_bytes = 8;
+    uint32_t iter = 0;
+    while (size) {
+        // format
+        uint32_t buffer1=0;
+        uint32_t buffer2=0;
+        for (int i=0; i<num_bytes; i++) {
+          uint8_t b = *(mem_pointer);
+          mem_pointer++;
+          if (i < num_bytes/2) {
+            buffer1 = buffer1 | (b << 8*i);
+          } else {
+            buffer2 = buffer2 | (b << 8*(i-num_bytes/2));
+          }
+        }
+        // dump if non-zero
+        if (buffer1 > 0 || buffer2 > 0) {
+          hex_file << std::dec << iter << " ";
+          hex_file << std::hex << std::setfill('0') << std::setw(8) << buffer2;
+          hex_file << std::hex << std::setfill('0') << std::setw(8) << buffer1;
+          hex_file << std::endl;
+        }
+
+        size-=num_bytes;
+        iter++;
+    }
+
+    hex_file.close();
+}*/
+
 static uint32_t create_csrrw(int rs, uint32_t csrn) { return 0x1073 | ((csrn & 0xFFF) << 20) | ((rs & 0x1F) << 15); }
 
 static uint32_t create_csrrs(int rd, uint32_t csrn) { return 0x2073 | ((csrn & 0xFFF) << 20) | ((rd & 0x1F) << 7); }
@@ -2153,6 +2248,20 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     serialize_memory(rom, ROM_SIZE, file);
 }
 
+/*  MEM LOC INITIALIZE
+    initialize mem_loc_t type array to default values
+    diff = 0 and is_ram = false
+*/
+
+static void init_mem_loc_t(mem_loc_t *mem_loc, int size)
+{
+    for(int i = 0; i< size; i++)
+    {
+        mem_loc[i].diff = 0;
+        mem_loc[i].is_ram = false;
+    }
+}
+
 void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t clint_base_addr) {
     FILE * conf_fd   = 0;
     size_t n         = strlen(dump_name) + 64;
@@ -2214,6 +2323,20 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
 
     PhysMemoryRange *boot_ram       = 0;
     int              main_ram_found = 0;
+    int              num_ram        = 0;
+    mem_loc_t mem_loc[s->mem_map->n_phys_mem_range];
+    init_mem_loc_t(mem_loc, s->mem_map->n_phys_mem_range);
+
+    /*
+        make an array, sorted by start address (pr->addr) from ram base to max
+        call dumper repeatedly with each mem range
+        if first call, send falg true -> open file write
+        if not first call send flag false -> open file append
+        if not first call fseek to appropriate location and write
+        do for all mem ranges that are "ram" and above 0x8000_0000
+    */
+
+    printf("\nRam base addr: %016x num_physmem_range: %d\n", s->machine->ram_base_addr, s->mem_map->n_phys_mem_range);
 
     for (int i = s->mem_map->n_phys_mem_range - 1; i >= 0; --i) {
         PhysMemoryRange *pr = &s->mem_map->phys_mem_range[i];
@@ -2230,9 +2353,20 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
             char *f_name = (char *)alloca(strlen(dump_name) + 64);
             sprintf(f_name, "%s.mainram", dump_name);
             //printf("\n\n CREATING MAINRAM SIZE : %lu", pr->size);
-            serialize_memory(pr->phys_mem, pr->size, f_name);
+            //serialize_memory(pr->phys_mem, pr->size, f_name);
+            //dump_hex_memory(pr->phys_mem, pr->size, f_name);
+            dump_mainram(pr->phys_mem, pr->size, f_name);
         }
+        if(pr->is_ram && pr->addr >= s->machine->ram_base_addr)
+        {
+            mem_loc[i].diff = pr->addr - s->machine->ram_base_addr;
+            mem_loc[i].is_ram = true;
+            num_ram++;
+        }
+        printf("\nmem_loc: %d diff: %ld is_ram: %d", i, mem_loc[i].diff, mem_loc[i].is_ram);
     }
+
+
 
     if (!boot_ram || !main_ram_found) {
         fprintf(dromajo_stderr, "ERROR: could not find boot and main ram???\n");
