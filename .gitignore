@@ -8,3 +8,4 @@ tags
 build
 ._.DS_Store
 .DS_Store
+run/checkpoints/*

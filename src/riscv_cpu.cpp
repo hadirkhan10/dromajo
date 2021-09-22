@@ -1879,6 +1879,94 @@ static void deserialize_memory(void *base, size_t size, const char *file) {
     close(f_fd);
 }
 
+static void dump_mainram_helper(const void* base, size_t size, bool first, uint64_t ram_base_addr, uint64_t cur_base, const char *file)
+{
+    size_t dump_chunk = 1; //1 byte
+    uint8_t* mem_ptr = (uint8_t*) base;
+    uint64_t counter = 0;
+    uint64_t diff = 0;
+    FILE *out;
+    if(first)
+    {
+        out = fopen(file, "wb");
+    }
+    else
+    {
+        out = fopen(file, "r+b");
+    }
+    //  Dumping into the file
+    if(out != NULL)
+     {
+        //printf("\nopened file %s with first %d ram_base: %016x cur_base: %016x size: %016x\n", file, first, ram_base_addr, cur_base, size);
+        //  First time, write entire "mainram" region;
+        if(first)
+        {
+            size_t to_go = size;
+            while(to_go > 0)
+            {
+                uint8_t* temp_ptr= mem_ptr;
+                counter +=1;
+                const size_t wrote = fwrite(temp_ptr, dump_chunk, 1, out);
+                mem_ptr++;
+                to_go -= dump_chunk;
+            }
+        }
+        else    //  write parts of the file for other "mainram" regions
+        {
+            diff = cur_base - ram_base_addr;
+            fseek(out, diff, SEEK_SET);
+            size_t to_go = size;
+            while(to_go > 0)
+            {
+                uint8_t* temp_ptr= mem_ptr;
+                counter +=1;
+                const size_t wrote = fwrite(temp_ptr, dump_chunk, 1, out);
+                mem_ptr++;
+                to_go -= dump_chunk;
+            }
+        }
+        fclose(out);
+    }
+    else
+    {
+        err(-3, "cant open mainram file: %s", file);
+    }
+}
+
+static void dump_mainram(RISCVCPUState *s, mem_loc_t *mem_loc, int num_ram, const char *file)
+{
+    //printf("\nGOT %d rams to dump in file: \n", num_ram, file);
+    bool first = true;
+    uint64_t pref_diff = 0;
+    while(num_ram > 0)
+    {
+        for(int i=0; i<s->mem_map->n_phys_mem_range; i++)
+        {
+            if(first)
+            {
+                if(mem_loc[i].is_ram && mem_loc[i].diff == 0)
+                {
+                    PhysMemoryRange *pr = &s->mem_map->phys_mem_range[mem_loc[i].act_loc];
+                    dump_mainram_helper(pr->phys_mem, pr->size, first, s->machine->ram_base_addr, pr->addr, file);
+                    first = false;
+                    num_ram--;
+                    break;
+                }
+            }
+            else
+            {
+                if(mem_loc[i].is_ram && mem_loc[i].diff !=0)
+                {
+                    PhysMemoryRange *pr = &s->mem_map->phys_mem_range[mem_loc[i].act_loc];
+                    dump_mainram_helper(pr->phys_mem, pr->size, first, s->machine->ram_base_addr, pr->addr, file);
+                    num_ram--;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 static uint32_t create_csrrw(int rs, uint32_t csrn) { return 0x1073 | ((csrn & 0xFFF) << 20) | ((rs & 0x1F) << 15); }
 
 static uint32_t create_csrrs(int rd, uint32_t csrn) { return 0x2073 | ((csrn & 0xFFF) << 20) | ((rd & 0x1F) << 7); }
@@ -2195,6 +2283,17 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     serialize_memory(rom, ROM_SIZE, file);
 }
 
+static void init_mem_loc_t(mem_loc_t *mem_loc, int size)
+{
+    for(int i = 0; i< size; i++)
+    {
+        mem_loc[i].diff = 0; 
+        mem_loc[i].is_ram = false;
+        mem_loc[i].act_loc = 0;
+    }
+}
+
+
 void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t clint_base_addr) {
     FILE * conf_fd   = 0;
     size_t n         = strlen(dump_name) + 64;
@@ -2256,6 +2355,9 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
 
     PhysMemoryRange *boot_ram       = 0;
     int              main_ram_found = 0;
+    int              num_ram        = 0;
+    mem_loc_t mem_loc[s->mem_map->n_phys_mem_range];
+    init_mem_loc_t(mem_loc, s->mem_map->n_phys_mem_range);
 
     for (int i = s->mem_map->n_phys_mem_range - 1; i >= 0; --i) {
         PhysMemoryRange *pr = &s->mem_map->phys_mem_range[i];
@@ -2269,11 +2371,25 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
             assert(!main_ram_found);
             main_ram_found = 1;
 
-            char *f_name = (char *)alloca(strlen(dump_name) + 64);
-            sprintf(f_name, "%s.mainram", dump_name);
+            //char *f_name = (char *)alloca(strlen(dump_name) + 64);
+            //sprintf(f_name, "%s.mainram", dump_name);
 
-            serialize_memory(pr->phys_mem, pr->size, f_name);
+            //serialize_memory(pr->phys_mem, pr->size, f_name);
         }
+        if(pr->is_ram && pr->addr >= s->machine->ram_base_addr)
+        {
+            mem_loc[i].diff = pr->addr - s->machine->ram_base_addr;
+            mem_loc[i].is_ram = true;
+            mem_loc[i].act_loc = i;
+            num_ram++;
+        }
+    }
+
+    if(main_ram_found)
+    {
+        char *f_name = (char *)alloca(strlen(dump_name) + 64);
+        sprintf(f_name, "%s.mainram", dump_name);
+        dump_mainram(s, mem_loc, num_ram, f_name);
     }
 
     if (!boot_ram || !main_ram_found) {
