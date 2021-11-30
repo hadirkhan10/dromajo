@@ -568,6 +568,7 @@ static void usage(const char *prog, const char *msg) {
             "       --plic START:SIZE set PLIC start address and size in B (defaults to 0x%lx:0x%lx)\n"
             "       --clint START:SIZE set CLINT start address and size in B (defaults to 0x%lx:0x%lx)\n"
             "       --custom_extension add X extension to misa for all cores\n"
+			"       --gdbinit <portname> initialize dromajo with gdb and start listening on localhost:<portname>\n"
 #ifdef LIVECACHE
             "       --live_cache_size live cache warmup for checkpoint (default 8M)\n"
 #endif
@@ -665,6 +666,7 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
             {"clint",                   required_argument, 0,  'C' }, // CFG
             {"custom_extension",              no_argument, 0,  'u' }, // CFG
             {"clear_ids",                     no_argument, 0,  'L' }, // CFG
+            {"gdbinit",                     required_argument, 0,  'G' }, // CFG
 #ifdef LIVECACHE
             {"live_cache_size",         required_argument, 0,  'w' }, // CFG
 #endif
@@ -842,6 +844,8 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
                 }
                 break;
 #endif
+            case 'G':
+                break;
 
             default: usage(prog, "I'm not having this argument");
         }
