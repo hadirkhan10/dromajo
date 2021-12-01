@@ -606,23 +606,20 @@ int main(int argc, char **argv) {
     	int option_index = 0;
         // clang-format off
         static struct option long_options[] = {
-            {"gdbinit",                     required_argument, 0,  'G' }, // CFG
-            {0,                         0,                 0,  0 }
+            {"gdbinit",                     required_argument, 0,  'G' } // CFG
         };
         // clang-format on
 
         int c = getopt_long(argc, argv, "", long_options, &option_index);
-        if (c == -1)
-			printf("Missing arguments to dromajo call\n");
+        if (c == -1) {
             break;
-
+		}
         switch (c) {
             case 'G':
 				port_name = strdup(optarg);
 				port_num = atoi(port_name);
-				printf("Initialized with GDB and got value: %d\n", port_num);
                 break;
-            default: printf("I'm not having this argument");
+            default: break;
 		}
 	};
 
@@ -640,6 +637,7 @@ int main(int argc, char **argv) {
 
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = INADDR_ANY;
+	printf("Port number I am getting is: %d\n", port_num);
 	address.sin_port = htons( port_num);
 
 	int connection = bind(server_fd, (struct sockaddr *)&address, sizeof(address));
@@ -730,6 +728,7 @@ int main(int argc, char **argv) {
 // gdb stub code enging here
 
 int next;
+printf("Enter the number of instructions to run: \n");
 scanf("%d", &next); 
 #ifdef REGRESS_COSIM
     dromajo_cosim_state_t *costate = 0;
@@ -758,15 +757,6 @@ scanf("%d", &next);
  	return 1;
 }
 
-int result = 0;
-do {
-	printf("Enter the value for myvar: \n");
-	result = fscanf(stdin, "%d", &next);
-} while(result == 0);
-int myvar;
-do {
-	myvar = 1;
-} while(myvar!= 0);
 int i;
 for (i=0; i<next; i++) {
 	iterate_core(m,0);
